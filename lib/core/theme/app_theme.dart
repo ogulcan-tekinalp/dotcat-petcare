@@ -9,13 +9,13 @@ class AppColors {
   static const backgroundLight = Color(0xFFF5F8FA);
   static const surfaceLight = Colors.white;
   static const textPrimaryLight = Color(0xFF2D3436);
-  static const textSecondaryLight = Color(0xFF636E72);
+  static const textSecondaryLight = Color(0xFF757575); // Improved contrast (WCAG AA)
   
   // Dark mode colors
   static const backgroundDark = Color(0xFF1A1A2E);
   static const surfaceDark = Color(0xFF16213E);
   static const textPrimaryDark = Color(0xFFEAEAEA);
-  static const textSecondaryDark = Color(0xFFB0B0B0);
+  static const textSecondaryDark = Color(0xFFBDBDBD); // Improved contrast (WCAG AA)
   
   // Legacy static colors (for non-context usage)
   static const textPrimary = Color(0xFF2D3436);

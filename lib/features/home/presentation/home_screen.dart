@@ -1,19 +1,23 @@
 import 'dart:async';
 import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/localization.dart';
 import '../../../core/utils/date_helper.dart';
 import '../../../core/utils/notification_service.dart';
+import '../../../core/utils/page_transitions.dart';
 import '../../../core/providers/language_provider.dart';
-import '../../../data/database/database_helper.dart';
-import '../../../core/services/firestore_service.dart';
+import '../../../core/widgets/app_chip.dart';
+import '../../../core/widgets/app_badge.dart';
+import '../../../core/constants/app_spacing.dart';
 import '../../../data/models/reminder_completion.dart';
 import '../../cats/providers/cats_provider.dart';
 import '../../reminders/providers/reminders_provider.dart';
+import '../../reminders/providers/completions_provider.dart';
 import '../../cats/presentation/cat_detail_screen.dart';
 import '../../cats/presentation/add_cat_screen.dart';
 import '../../reminders/presentation/add_reminder_screen.dart';
@@ -31,18 +35,59 @@ bool _photoExists(String? path) {
 Widget _buildCatPhoto(String? photoPath, {double radius = 24, double iconSize = 24}) {
   final exists = _photoExists(photoPath);
   final isUrl = photoPath != null && (photoPath.startsWith('http://') || photoPath.startsWith('https://'));
-  return Container(
-    width: radius * 2,
-    height: radius * 2,
-    decoration: BoxDecoration(
-      color: AppColors.primary.withOpacity(0.1),
-      borderRadius: BorderRadius.circular(radius / 2 + 4),
-      image: exists ? DecorationImage(
-        image: isUrl ? NetworkImage(photoPath!) as ImageProvider : FileImage(File(photoPath!)),
-        fit: BoxFit.cover,
-      ) : null,
+  
+  return ClipRRect(
+    borderRadius: BorderRadius.circular(radius / 2 + 4),
+    child: Container(
+      width: radius * 2,
+      height: radius * 2,
+      decoration: BoxDecoration(
+        color: AppColors.primary.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(radius / 2 + 4),
+      ),
+      child: exists
+          ? (isUrl
+              ? CachedNetworkImage(
+                  imageUrl: photoPath!,
+                  width: radius * 2,
+                  height: radius * 2,
+                  fit: BoxFit.cover,
+                  placeholder: (context, url) => Container(
+                    width: radius * 2,
+                    height: radius * 2,
+                    color: AppColors.primary.withOpacity(0.1),
+                    child: Center(
+                      child: SizedBox(
+                        width: iconSize * 0.5,
+                        height: iconSize * 0.5,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+                        ),
+                      ),
+                    ),
+                  ),
+                  errorWidget: (context, url, error) => Container(
+                    width: radius * 2,
+                    height: radius * 2,
+                    color: AppColors.primary.withOpacity(0.1),
+                    child: Icon(Icons.pets_rounded, color: AppColors.primary, size: iconSize),
+                  ),
+                )
+              : Image.file(
+                  File(photoPath!),
+                  width: radius * 2,
+                  height: radius * 2,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) => Container(
+                    width: radius * 2,
+                    height: radius * 2,
+                    color: AppColors.primary.withOpacity(0.1),
+                    child: Icon(Icons.pets_rounded, color: AppColors.primary, size: iconSize),
+                  ),
+                ))
+          : Icon(Icons.pets_rounded, color: AppColors.primary, size: iconSize),
     ),
-    child: exists ? null : Icon(Icons.pets_rounded, color: AppColors.primary, size: iconSize),
   );
 }
 
@@ -91,8 +136,6 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   int _currentIndex = 0;
   String? _globalTypeFilter;
-  Set<String> _completedDates = {};
-  Map<String, DateTime> _completionTimes = {}; // Completion zamanları (id -> completedAt)
   final Set<String> _expandedGroups = {}; // Açık olan gruplar
   Set<String> _selectedCatIds = {}; // Seçilen kediler (boş = tümü)
   // Her liste için ayrı tarih aralığı (gün cinsinden)
@@ -103,37 +146,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    // Completions'ı hemen yükle (async olarak)
-    _loadCompletions();
-    // Real-time sync'i başlat
-    _setupRealtimeSync();
-    // Diğer verileri de yükle
+    // Diğer verileri yükle
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadAllData();
     });
-  }
-
-  @override
-  void dispose() {
-    _completionsSubscription?.cancel();
-    super.dispose();
-  }
-
-  // Gerçek zamanlı sync için Firestore stream'i dinle
-  void _setupRealtimeSync() {
-    final auth = FirebaseAuth.instance;
-    if (auth.currentUser != null) {
-      _completionsSubscription = _firestore.getCompletionsStream().listen((completions) {
-        if (mounted) {
-          setState(() {
-            _completedDates = completions.map((c) => c.id).toSet();
-            _completionTimes = {for (var c in completions) c.id: c.completedAt};
-          });
-        }
-      }, onError: (error) {
-        debugPrint('HomeScreen: Realtime sync error: $error');
-      });
-    }
   }
 
   Future<void> _loadAllData() async {
@@ -141,53 +157,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       // Cats ve reminders'ı yükle (cloud sync dahil)
       await ref.read(catsProvider.notifier).loadCats();
       await ref.read(remindersProvider.notifier).loadReminders();
-      // Completions'ı tekrar yükle (cloud'dan gelen yeni veriler için)
-      await _loadCompletions();
+      // Completions'ı refresh et (merkezi provider'dan)
+      await ref.read(completionsProvider.notifier).refresh();
     } catch (e, stackTrace) {
       debugPrint('HomeScreen: _loadAllData error: $e');
       debugPrint('HomeScreen: _loadAllData stackTrace: $stackTrace');
-    }
-  }
-
-  Future<void> _loadCompletions() async {
-    try {
-      final auth = FirebaseAuth.instance;
-      if (auth.currentUser != null) {
-        // Firebase'den çek
-        final cloudCompletions = await _firestore.getCompletions();
-        if (mounted) {
-          setState(() {
-            _completedDates = cloudCompletions.map((c) => c.id).toSet();
-            _completionTimes = {for (var c in cloudCompletions) c.id: c.completedAt};
-          });
-        }
-      } else {
-        // Local DB'den çek (offline/anonim durumlar için fallback)
-        final completions = await DatabaseHelper.instance.getAllCompletedDates();
-        final completionTimes = await DatabaseHelper.instance.getCompletionTimes();
-        if (mounted) {
-          setState(() {
-            _completedDates = completions;
-            _completionTimes = completionTimes;
-          });
-        }
-      }
-    } catch (e, stackTrace) {
-      debugPrint('HomeScreen: _loadCompletions error: $e');
-      debugPrint('HomeScreen: stackTrace: $stackTrace');
-      // Hata durumunda local DB'den çek (fallback)
-      try {
-        final completions = await DatabaseHelper.instance.getAllCompletedDates();
-        final completionTimes = await DatabaseHelper.instance.getCompletionTimes();
-        if (mounted) {
-          setState(() {
-            _completedDates = completions;
-            _completionTimes = completionTimes;
-          });
-        }
-      } catch (e2) {
-        debugPrint('HomeScreen: Local DB fallback error: $e2');
-      }
     }
   }
 
@@ -332,8 +306,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final today = DateTime(now.year, now.month, now.day);
     
     // Güncel completions'ı kullan
-    final currentCompletedDates = _completedDates;
-    final currentCompletionTimes = _completionTimes;
+    final completionsState = ref.watch(completionsProvider);
+    final currentCompletedDates = completionsState.completedDates;
+    final currentCompletionTimes = completionsState.completionTimes;
     
     // Genel üretim için geniş tarih aralığı:
     // - geçmiş ve tamamlananlar için geçmişe doğru en büyük aralık
@@ -461,21 +436,34 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }).toList();
     allCompletedGroups.sort((a, b) => b.firstItem.date.compareTo(a.firstItem.date));
 
-    return CustomScrollView(
-      slivers: [
-        SliverAppBar(
-          floating: true,
-          centerTitle: false,
-          title: const Text('PetCare', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22)),
+    return RefreshIndicator(
+      onRefresh: () async {
+        await _loadAllData();
+      },
+      child: CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
+        ),
+        slivers: [
+          SliverAppBar(
+            floating: true,
+            centerTitle: false,
+            title: const Text('PetCare', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22)),
           actions: [
             IconButton(
               icon: const Icon(Icons.calendar_month_rounded),
               tooltip: AppLocalizations.get('calendar'),
-              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const CalendarScreen())),
+              onPressed: () => Navigator.push(
+                context,
+                PageTransitions.slide(page: const CalendarScreen()),
+              ),
             ),
             IconButton(
               icon: const Icon(Icons.settings_outlined),
-              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())),
+              onPressed: () => Navigator.push(
+                context,
+                PageTransitions.slide(page: const SettingsScreen()),
+              ),
             ),
           ],
         ),
@@ -661,7 +649,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           }, childCount: allCompletedGroups.length)),
         
         const SliverToBoxAdapter(child: SizedBox(height: 80)),
-      ],
+        ],
+      ),
     );
   }
 
@@ -797,36 +786,33 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     else if (type == 'food') chipColor = AppColors.food;
     else if (type == 'weight') chipColor = AppColors.warning;
     
-    return GestureDetector(
+    return AppChip(
+      label: label,
+      icon: icon,
+      isSelected: isSelected,
+      color: chipColor,
       onTap: () => setState(() => _globalTypeFilter = type),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: isSelected ? chipColor.withOpacity(0.15) : Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: isSelected ? chipColor : Colors.grey.shade300),
-        ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(icon, size: 14, color: isSelected ? chipColor : AppColors.textSecondary),
-          const SizedBox(width: 4),
-          Text(label, style: TextStyle(fontSize: 12, color: isSelected ? chipColor : AppColors.textSecondary, fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal)),
-        ]),
-      ),
     );
   }
 
   Widget _buildSectionHeader(IconData icon, String title, int count, Color color) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.md, AppSpacing.md, AppSpacing.sm),
       child: Row(children: [
-        Icon(icon, color: color, size: 20),
-        const SizedBox(width: 8),
-        Text(title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: icon == Icons.warning_amber_rounded ? color : null)),
-        const SizedBox(width: 8),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-          decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-          child: Text('$count', style: TextStyle(fontSize: 12, color: color, fontWeight: FontWeight.bold)),
+        Icon(icon, color: color, size: AppSpacing.iconSm),
+        const SizedBox(width: AppSpacing.sm),
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: icon == Icons.warning_amber_rounded ? color : null,
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        AppBadge(
+          text: '$count',
+          color: color,
         ),
       ]),
     );
@@ -1138,8 +1124,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     onTap: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(
-                          builder: (_) => RecordDetailScreen(
+                        PageTransitions.slide(
+                          page: RecordDetailScreen(
                             record: reminder,
                             catName: cat.name,
                           ),
@@ -1308,38 +1294,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   Future<void> _toggleCompletion(EventItem item) async {
     try {
-      final auth = FirebaseAuth.instance;
       final wasCompleted = item.isCompleted;
+      final completionId = '${item.reminder.id}_${item.date.toIso8601String().split('T')[0]}';
       
-      if (auth.currentUser != null) {
-        // Firebase'e kaydet
-        if (wasCompleted) {
-          // Tamamlanandan geri al
-          final completionId = '${item.reminder.id}_${item.date.toIso8601String().split('T')[0]}';
-          await _firestore.deleteCompletion(completionId);
-        } else {
-          // Tamamlandı olarak işaretle
-          final completion = ReminderCompletion(
-            id: '${item.reminder.id}_${item.date.toIso8601String().split('T')[0]}',
-            reminderId: item.reminder.id,
-            completedDate: item.date,
-            completedAt: DateTime.now(),
-          );
-          await _firestore.saveCompletion(completion);
-        }
-        // Real-time stream otomatik güncelleyecek, ama yine de yükle
-        await _loadCompletions();
+      if (wasCompleted) {
+        // Tamamlanandan geri al
+        await ref.read(completionsProvider.notifier).deleteCompletion(
+          completionId,
+          item.reminder.id,
+          item.date,
+        );
       } else {
-        // Local DB'ye kaydet (offline/anonim durumlar için fallback)
-        final db = DatabaseHelper.instance;
-        if (wasCompleted) {
-          await db.deleteCompletion(item.reminder.id, item.date);
-        } else {
-          await db.insertCompletion(item.reminder.id, item.date);
-        }
-        await _loadCompletions();
+        // Tamamlandı olarak işaretle
+        final completion = ReminderCompletion(
+          id: completionId,
+          reminderId: item.reminder.id,
+          completedDate: item.date,
+          completedAt: DateTime.now(),
+        );
+        await ref.read(completionsProvider.notifier).saveCompletion(completion);
       }
-      
+    
       if (mounted) {
         final isNowCompleted = !wasCompleted;
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -1376,7 +1351,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         margin: const EdgeInsets.all(16),
-        action: SnackBarAction(label: AppLocalizations.get('add'), textColor: Colors.white, onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AddCatScreen()))),
+        action: SnackBarAction(
+          label: AppLocalizations.get('add'),
+          textColor: Colors.white,
+          onPressed: () => Navigator.push(
+            context,
+            PageTransitions.fadeSlide(page: const AddCatScreen()),
+          ),
+        ),
       ));
       return;
     }
@@ -1406,7 +1388,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   Navigator.pop(context);
                   final granted = await NotificationService.instance.requestPermission();
                   if (granted && mounted) {
-                    Navigator.push(context, MaterialPageRoute(builder: (_) => AddReminderScreen(initialType: type)));
+                    Navigator.push(
+                      context,
+                      PageTransitions.fadeSlide(page: AddReminderScreen(initialType: type)),
+                    );
                   } else if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                       content: Text(AppLocalizations.get('notification_permission_required')),
@@ -1425,7 +1410,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       return;
     }
     
-    Navigator.push(context, MaterialPageRoute(builder: (_) => AddReminderScreen(initialType: type)));
+    Navigator.push(
+      context,
+      PageTransitions.fadeSlide(page: AddReminderScreen(initialType: type)),
+    );
   }
 
   Widget _buildCatsPage() {
@@ -1446,7 +1434,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
                 child: const Icon(Icons.add, color: AppColors.primary),
               ),
-              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AddCatScreen())),
+              onPressed: () => Navigator.push(
+                context,
+                PageTransitions.fadeSlide(page: const AddCatScreen()),
+              ),
             ),
           ],
         ),
@@ -1473,7 +1464,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     width: double.infinity,
                     height: 56,
                     child: ElevatedButton.icon(
-                      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AddCatScreen())),
+                      onPressed: () => Navigator.push(
+                context,
+                PageTransitions.fadeSlide(page: const AddCatScreen()),
+              ),
                       icon: const Icon(Icons.add),
                       label: Text(AppLocalizations.get('add_cat'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                       style: ElevatedButton.styleFrom(
@@ -1497,29 +1491,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 final now = DateTime.now();
                 final today = DateTime(now.year, now.month, now.day);
                 
-                // Gecikmiş ve yaklaşan etkinlik sayılarını hesapla
+                // Ana sayfadaki mantıkla aynı hesaplama yap
+                // Completion durumlarını da hesaba kat
+                final completionsState = ref.watch(completionsProvider);
+                final currentCompletedDates = completionsState.completedDates;
                 int overdueCount = 0;
-                int pendingCount = 0;
+                
+                // Geçmiş 90 gün ve gelecek 90 gün aralığında kontrol et
+                final rangeStart = today.subtract(const Duration(days: 90));
+                final rangeEnd = today.add(const Duration(days: 90));
                 
                 for (final reminder in catReminders) {
-                  if (reminder.isCompleted) continue;
+                  // Ana sayfadaki _generateOccurrences mantığını kullan
+                  final occurrences = _generateOccurrences(reminder, cat, rangeStart, rangeEnd, currentCompletedDates);
                   
-                  final reminderDate = DateTime(reminder.createdAt.year, reminder.createdAt.month, reminder.createdAt.day);
-                  if (reminder.frequency == 'once') {
-                    if (reminderDate.isBefore(today)) {
+                  for (final item in occurrences) {
+                    // Sadece tamamlanmamış olanları say
+                    if (item.isCompleted) continue;
+                    
+                    // Sadece gecikmiş olanları say (yaklaşan sayıları gösterme)
+                    if (item.status == 'overdue') {
                       overdueCount++;
-                    } else if (reminderDate.isAfter(today) || reminderDate.isAtSameMomentAs(today)) {
-                      pendingCount++;
-                    }
-                  } else {
-                    // Tekrarlayan etkinlikler için nextDate'e bak
-                    if (reminder.nextDate != null) {
-                      final nextDate = DateTime(reminder.nextDate!.year, reminder.nextDate!.month, reminder.nextDate!.day);
-                      if (nextDate.isBefore(today)) {
-                        overdueCount++;
-                      } else {
-                        pendingCount++;
-                      }
                     }
                   }
                 }
@@ -1527,7 +1519,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: GestureDetector(
-                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => CatDetailScreen(cat: cat))),
+                    onTap: () => Navigator.push(
+                      context,
+                      PageTransitions.slide(page: CatDetailScreen(cat: cat)),
+                    ),
                     child: Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
@@ -1552,28 +1547,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                 decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
                                 child: Text(DateHelper.getAge(cat.birthDate), style: const TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w500)),
                               ),
-                              if (overdueCount > 0 || pendingCount > 0) ...[
+                              if (overdueCount > 0) ...[
                                 const SizedBox(width: 8),
-                                if (overdueCount > 0) ...[
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                    decoration: BoxDecoration(color: AppColors.error.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-                                    child: Row(mainAxisSize: MainAxisSize.min, children: [
-                                      const Icon(Icons.warning, size: 12, color: AppColors.error),
-                                      const SizedBox(width: 4),
-                                      Text('$overdueCount ${AppLocalizations.get('overdue_events_count')}', style: const TextStyle(fontSize: 12, color: AppColors.error, fontWeight: FontWeight.w500)),
-                                    ]),
-                                  ),
-                                  if (pendingCount > 0) const SizedBox(width: 6),
-                                ],
-                                if (pendingCount > 0)
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                  decoration: BoxDecoration(color: AppColors.warning.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                                  decoration: BoxDecoration(color: AppColors.error.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
                                   child: Row(mainAxisSize: MainAxisSize.min, children: [
-                                    const Icon(Icons.schedule, size: 12, color: AppColors.warning),
+                                    const Icon(Icons.warning, size: 12, color: AppColors.error),
                                     const SizedBox(width: 4),
-                                      Text('$pendingCount ${AppLocalizations.get('pending_events_count')}', style: const TextStyle(fontSize: 12, color: AppColors.warning, fontWeight: FontWeight.w500)),
+                                    Text('$overdueCount ${AppLocalizations.get('overdue_events_count')}', style: const TextStyle(fontSize: 12, color: AppColors.error, fontWeight: FontWeight.w500)),
                                   ]),
                                 ),
                               ],
@@ -1590,8 +1572,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
                 );
               }, childCount: cats.length),
-            ),
           ),
+        ),
       ],
     );
   }

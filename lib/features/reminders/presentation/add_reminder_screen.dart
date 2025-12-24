@@ -3,9 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/localization.dart';
+import '../../../core/utils/page_transitions.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/notification_service.dart';
 import '../../../core/services/firestore_service.dart';
+import '../../../core/widgets/app_button.dart';
+import '../../../core/widgets/app_text_field.dart';
+import '../../../core/constants/app_spacing.dart';
 import '../../cats/providers/cats_provider.dart';
 import '../providers/reminders_provider.dart';
 
@@ -290,7 +294,7 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
         }
         
         // Provider'ı güncelle
-        await ref.read(remindersProvider.notifier).loadRemindersForCat(reminder.catId);
+        await ref.read(remindersProvider.notifier).loadReminders();
         
         if (mounted) {
           Navigator.pop(context);
@@ -358,6 +362,7 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
     return Scaffold(
       appBar: AppBar(title: Text(widget.reminder != null ? AppLocalizations.get('edit_record') : AppLocalizations.get('add_record'))),
       body: ListView(
+        physics: const BouncingScrollPhysics(), // iOS-style smooth scrolling
         padding: const EdgeInsets.all(16),
         children: [
           // Cat selection

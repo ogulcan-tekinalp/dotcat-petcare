@@ -106,6 +106,16 @@ class NotificationService {
     return true;
   }
 
+  /// Ses önizlemesi için kısa bildirim göster
+  Future<void> previewSound(String soundType) async {
+    await showNotification(
+      id: 99999, // Önizleme için özel ID
+      title: 'Ses Önizlemesi',
+      body: soundType == 'cat_meow' ? 'Miyav!' : 'Bildirim sesi',
+      soundType: soundType,
+    );
+  }
+
   Future<void> showNotification({
     required int id,
     required String title,

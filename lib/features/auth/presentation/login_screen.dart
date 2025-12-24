@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/localization.dart';
+import '../../../core/utils/page_transitions.dart';
+import '../../../core/widgets/app_button.dart';
+import '../../../core/widgets/app_text_field.dart';
+import '../../../core/constants/app_spacing.dart';
 import '../../../core/services/auth_service.dart';
 import '../../home/presentation/home_screen.dart';
 
@@ -188,7 +191,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
 
 
   void _goToHome() {
-    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen()));
+    Navigator.pushReplacement(
+      context,
+      PageTransitions.fade(page: const HomeScreen()),
+    );
   }
 
   @override
@@ -246,35 +252,72 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
                   // Google Sign In Button
                   SizedBox(
                     width: double.infinity,
-                    height: 56,
-                    child: ElevatedButton(
+                    height: AppSpacing.buttonHeightLg,
+                    child: OutlinedButton(
                       onPressed: _isLoading ? null : _signInWithGoogle,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: isDark ? Colors.white : Colors.white,
-                        foregroundColor: Colors.black87,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          side: BorderSide(color: Colors.grey.shade300),
+                      style: OutlinedButton.styleFrom(
+                        backgroundColor: isDark ? AppColors.surfaceDark : Colors.white,
+                        foregroundColor: isDark ? Colors.white : Colors.black87,
+                        side: BorderSide(
+                          color: isDark ? Colors.grey.shade700 : Colors.grey.shade300,
+                          width: 1,
                         ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
                       ),
                       child: _isLoading
-                        ? SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.grey.shade600))
-                        : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                            // Google Logo - kullanıcının eklediği logo
-                            Container(
-                              width: 20, height: 20,
-                              child: Image.asset(
-                                'assets/images/google.png',
-                                errorBuilder: (context, error, stackTrace) {
-                                  // Eğer dosya yoksa CustomPaint kullan
-                                  return CustomPaint(painter: GoogleLogoPainter());
-                                },
+                          ? SizedBox(
+                              width: AppSpacing.iconSm,
+                              height: AppSpacing.iconSm,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  isDark ? Colors.white : Colors.black87,
+                                ),
                               ),
+                            )
+                          : Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Image.asset(
+                                  'assets/images/google.png',
+                                  width: 20,
+                                  height: 20,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    // Fallback: Google renklerinde basit G ikonu
+                                    return Container(
+                                      width: 20,
+                                      height: 20,
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF4285F4),
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: const Center(
+                                        child: Text(
+                                          'G',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                                const SizedBox(width: AppSpacing.sm),
+                                Text(
+                                  AppLocalizations.get('sign_in_google'),
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: isDark ? Colors.white : Colors.black87,
+                                  ),
+                                ),
+                              ],
                             ),
-                            const SizedBox(width: 12),
-                            Text(AppLocalizations.get('sign_in_google'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                          ]),
                     ),
                   ),
                   
@@ -297,62 +340,33 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
                     key: _formKey,
                     child: Column(
                       children: [
-                        TextFormField(
+                        AppTextField(
                           controller: _emailController,
+                          label: AppLocalizations.get('email'),
                           keyboardType: TextInputType.emailAddress,
-                          decoration: InputDecoration(
-                            labelText: AppLocalizations.get('email'),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-                            prefixIcon: const Icon(Icons.email_outlined),
-                          ),
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return AppLocalizations.get('email') + ' ' + AppLocalizations.get('required');
-                            }
-                            if (!value.contains('@')) {
-                              return AppLocalizations.get('invalid_email');
-                            }
-                            return null;
-                          },
+                          prefixIcon: Icons.email_outlined,
+                          errorText: _emailController.text.isNotEmpty && !_emailController.text.contains('@')
+                              ? AppLocalizations.get('invalid_email')
+                              : null,
                         ),
-                        const SizedBox(height: 16),
-                        TextFormField(
+                        const SizedBox(height: AppSpacing.md),
+                        AppTextField(
                           controller: _passwordController,
+                          label: AppLocalizations.get('password'),
                           obscureText: _obscurePassword,
-                          decoration: InputDecoration(
-                            labelText: AppLocalizations.get('password'),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-                            prefixIcon: const Icon(Icons.lock_outlined),
-                            suffixIcon: IconButton(
-                              icon: Icon(_obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined),
-                              onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                            ),
+                          prefixIcon: Icons.lock_outlined,
+                          suffixIcon: IconButton(
+                            icon: Icon(_obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+                            onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                           ),
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return AppLocalizations.get('password') + ' ' + AppLocalizations.get('required');
-                            }
-                            if (value.length < 6) {
-                              return AppLocalizations.get('weak_password');
-                            }
-                            return null;
-                          },
                         ),
-                        const SizedBox(height: 16),
-                        SizedBox(
-                          width: double.infinity,
-                          height: 56,
-                          child: ElevatedButton(
-                            onPressed: _isLoading ? null : _signInWithEmailPassword,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.primary,
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                            ),
-                            child: _isLoading
-                              ? SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                              : Text(_isSignUp ? AppLocalizations.get('sign_up') : AppLocalizations.get('sign_in'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                          ),
+                        const SizedBox(height: AppSpacing.md),
+                        AppButton(
+                          label: _isSignUp ? AppLocalizations.get('sign_up') : AppLocalizations.get('sign_in'),
+                          onPressed: _signInWithEmailPassword,
+                          variant: ButtonVariant.filled,
+                          isLoading: _isLoading,
+                          height: AppSpacing.buttonHeightLg,
                         ),
                         const SizedBox(height: 8),
                         TextButton(
@@ -383,20 +397,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
                   const SizedBox(height: 16),
                   
                   // Anonymous Sign In Button
-                  SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: OutlinedButton(
-                      onPressed: _isLoading ? null : _signInAnonymously,
-                      style: OutlinedButton.styleFrom(
-                        side: BorderSide(color: Colors.grey.shade300),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      ),
-                      child: Text(
-                        AppLocalizations.get('sign_in_anonymous'),
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: context.textSecondary),
-                      ),
-                    ),
+                  AppButton(
+                    label: AppLocalizations.get('sign_in_anonymous'),
+                    onPressed: _signInAnonymously,
+                    variant: ButtonVariant.outlined,
+                    isLoading: _isLoading,
+                    height: AppSpacing.buttonHeightLg,
                   ),
                   
                   const Spacer(),

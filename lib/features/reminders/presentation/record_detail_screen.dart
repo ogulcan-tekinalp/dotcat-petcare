@@ -3,6 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/localization.dart';
 import '../../../core/utils/date_helper.dart';
+import '../../../core/utils/page_transitions.dart';
+import '../../../core/widgets/app_card.dart';
+import '../../../core/widgets/app_button.dart';
+import '../../../core/constants/app_spacing.dart';
 import '../../../data/models/reminder.dart';
 import 'add_reminder_screen.dart';
 import '../../../core/utils/notification_service.dart';
@@ -116,15 +120,15 @@ class _RecordDetailScreenState extends ConsumerState<RecordDetailScreen> {
                 // AddReminderScreen'e yönlendir (düzenleme modu - mevcut kayıt ile)
                 Navigator.push(
                   context,
-                  MaterialPageRoute(
-                    builder: (_) => AddReminderScreen(
+                  PageTransitions.slide(
+                    page: AddReminderScreen(
                       reminder: widget.record,
                     ),
                   ),
                 ).then((_) {
                   // Geri dönünce refresh et
                   if (mounted) {
-                    ref.read(remindersProvider.notifier).loadRemindersForCat(widget.record.catId);
+                    ref.read(remindersProvider.notifier).loadReminders();
                     setState(() {}); // UI'ı güncelle
                   }
                 });
@@ -155,16 +159,13 @@ class _RecordDetailScreenState extends ConsumerState<RecordDetailScreen> {
 
   Widget _buildDetailView(bool isDark) {
     return ListView(
+      physics: const BouncingScrollPhysics(), // iOS-style smooth scrolling
       padding: const EdgeInsets.all(16),
       children: [
         // Header card
-        Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: isDark ? AppColors.surfaceDark : Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 15, offset: const Offset(0, 4))],
-          ),
+        AppCard(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
           child: Column(
             children: [
               // Tür logosu (dotcat için özel logo, diğerleri için icon)
@@ -184,8 +185,10 @@ class _RecordDetailScreenState extends ConsumerState<RecordDetailScreen> {
               Text(widget.catName, style: TextStyle(fontSize: 16, color: context.textSecondary, fontWeight: FontWeight.w500)),
               const SizedBox(height: 24),
               // Tamamlandı butonu - daha belirgin ve büyük
-              GestureDetector(
-                onTap: () async {
+              AppButton(
+                label: _isCompleted ? AppLocalizations.get('completed') : AppLocalizations.get('mark_completed'),
+                icon: _isCompleted ? Icons.check_circle_rounded : Icons.schedule_rounded,
+                onPressed: () async {
                   setState(() => _isCompleted = !_isCompleted);
                   await ref.read(remindersProvider.notifier).toggleReminder(widget.record);
                   if (mounted) {
@@ -196,58 +199,18 @@ class _RecordDetailScreenState extends ConsumerState<RecordDetailScreen> {
                     ));
                   }
                 },
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: _isCompleted 
-                          ? [AppColors.success, AppColors.success.withOpacity(0.8)]
-                          : [AppColors.warning, AppColors.warning.withOpacity(0.8)],
-                    ),
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: (_isCompleted ? AppColors.success : AppColors.warning).withOpacity(0.4),
-                        blurRadius: 15,
-                        offset: const Offset(0, 6),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        _isCompleted ? Icons.check_circle_rounded : Icons.schedule_rounded,
-                        size: 28,
-                        color: Colors.white,
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        _isCompleted ? AppLocalizations.get('completed') : AppLocalizations.get('mark_completed'),
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                variant: ButtonVariant.filled,
+                color: _isCompleted ? AppColors.success : AppColors.warning,
+                height: AppSpacing.buttonHeightLg + 10,
               ),
             ],
           ),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: AppSpacing.lg),
 
         // Details
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: isDark ? AppColors.surfaceDark : Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10)],
-          ),
+        AppCard(
+          padding: const EdgeInsets.all(AppSpacing.lg),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -280,6 +243,7 @@ class _RecordDetailScreenState extends ConsumerState<RecordDetailScreen> {
 
   Widget _buildEditView(bool isDark) {
     return ListView(
+      physics: const BouncingScrollPhysics(), // iOS-style smooth scrolling
       padding: const EdgeInsets.all(16),
       children: [
         // Title
@@ -588,7 +552,7 @@ class _RecordDetailScreenState extends ConsumerState<RecordDetailScreen> {
     }
 
     // Reload reminders
-    await ref.read(remindersProvider.notifier).loadRemindersForCat(widget.record.catId);
+    await ref.read(remindersProvider.notifier).loadReminders();
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(

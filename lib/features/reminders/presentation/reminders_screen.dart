@@ -23,7 +23,7 @@ class _RemindersScreenState extends ConsumerState<RemindersScreen> {
     super.initState();
     _currentFilter = widget.filterType;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(remindersProvider.notifier).loadRemindersForCat(widget.cat.id);
+      ref.read(remindersProvider.notifier).loadReminders();
     });
   }
 

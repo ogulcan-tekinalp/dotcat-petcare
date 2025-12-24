@@ -211,6 +211,7 @@ class _AddCatScreenState extends ConsumerState<AddCatScreen> {
       body: Form(
         key: _formKey,
         child: ListView(
+          physics: const BouncingScrollPhysics(),
           padding: const EdgeInsets.all(16),
           children: [
             // Photo

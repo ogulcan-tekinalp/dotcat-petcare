@@ -41,8 +41,9 @@ class RemindersNotifier extends StateNotifier<List<Reminder>> {
   }
 
   Future<void> loadRemindersForCat(String catId) async {
-    // State'ten filtrele (cloud'dan zaten yüklenmiş)
-    state = state.where((r) => r.catId == catId).toList();
+    // Bu metod artık state'i değiştirmiyor
+    // Cat detail screen zaten ref.watch ile tüm reminder'ları alıp filtreliyor
+    // State'i değiştirmek diğer ekranlardaki verileri siliyordu - bu bug düzeltildi
   }
 
   Future<void> _scheduleNotificationForReminder(Reminder reminder, {String? catName}) async {

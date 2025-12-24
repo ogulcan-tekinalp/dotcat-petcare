@@ -51,6 +51,7 @@ class _WeightScreenState extends ConsumerState<WeightScreen> {
         ],
       ),
       body: ListView(
+        physics: const BouncingScrollPhysics(),
         padding: const EdgeInsets.all(16),
         children: [
           Container(

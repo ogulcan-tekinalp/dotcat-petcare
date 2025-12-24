@@ -1,5 +1,3 @@
-import 'package:flutter/material.dart';
-
 enum AppLanguage { en, tr, de, es, ar }
 
 class AppLocalizations {
@@ -2419,6 +2417,20 @@ class AppLocalizations {
       AppLanguage.de: 'anstehend',
       AppLanguage.es: 'próximo',
       AppLanguage.ar: 'قادم',
+    },
+    'error_occurred': {
+      AppLanguage.en: 'Error Occurred',
+      AppLanguage.tr: 'Hata Oluştu',
+      AppLanguage.de: 'Fehler aufgetreten',
+      AppLanguage.es: 'Error Ocurrido',
+      AppLanguage.ar: 'حدث خطأ',
+    },
+    'retry': {
+      AppLanguage.en: 'Retry',
+      AppLanguage.tr: 'Tekrar Dene',
+      AppLanguage.de: 'Wiederholen',
+      AppLanguage.es: 'Reintentar',
+      AppLanguage.ar: 'إعادة المحاولة',
     },
   };
 

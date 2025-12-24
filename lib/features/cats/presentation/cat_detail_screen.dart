@@ -1,9 +1,12 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/localization.dart';
 import '../../../core/utils/date_helper.dart';
+import '../../../core/utils/page_transitions.dart';
+import '../../../core/constants/app_spacing.dart';
 import '../../../data/models/cat.dart';
 import '../../reminders/providers/reminders_provider.dart';
 import '../../weight/providers/weight_provider.dart';
@@ -40,7 +43,9 @@ class _CatDetailScreenState extends ConsumerState<CatDetailScreen> {
   }
 
   Future<void> _loadData() async {
-    await ref.read(remindersProvider.notifier).loadRemindersForCat(_currentCat.id);
+    // loadRemindersForCat artık state'i değiştirmiyor - bug düzeltildi
+    // Tüm reminder'lar zaten yüklü, sadece filtreleme yapılıyor
+    await ref.read(remindersProvider.notifier).loadReminders();
     await ref.read(weightProvider.notifier).loadWeightRecords(_currentCat.id);
   }
 
@@ -71,7 +76,7 @@ class _CatDetailScreenState extends ConsumerState<CatDetailScreen> {
                 onPressed: () async {
                   final updatedCat = await Navigator.push<Cat>(
                     context,
-                    MaterialPageRoute(builder: (_) => EditCatScreen(cat: _currentCat)),
+                    PageTransitions.slide(page: EditCatScreen(cat: _currentCat)),
                   );
                   if (updatedCat != null) {
                     setState(() => _currentCat = updatedCat);
@@ -109,8 +114,22 @@ class _CatDetailScreenState extends ConsumerState<CatDetailScreen> {
                 children: [
                   if (_photoExists(_currentCat.photoPath))
                     _currentCat.photoPath!.startsWith('http')
-                        ? Image.network(_currentCat.photoPath!, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) {
-                            return Container(
+                        ? CachedNetworkImage(
+                            imageUrl: _currentCat.photoPath!,
+                            fit: BoxFit.cover,
+                            placeholder: (context, url) => Container(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                  colors: [AppColors.primary.withOpacity(0.8), AppColors.primary],
+                                ),
+                              ),
+                              child: const Center(
+                                child: CircularProgressIndicator(color: Colors.white38),
+                              ),
+                            ),
+                            errorWidget: (context, url, error) => Container(
                               decoration: BoxDecoration(
                                 gradient: LinearGradient(
                                   begin: Alignment.topLeft,
@@ -119,8 +138,8 @@ class _CatDetailScreenState extends ConsumerState<CatDetailScreen> {
                                 ),
                               ),
                               child: const Center(child: Icon(Icons.pets, size: 80, color: Colors.white38)),
-                            );
-                          })
+                            ),
+                          )
                         : Image.file(File(_currentCat.photoPath!), fit: BoxFit.cover)
                   else
                     Container(

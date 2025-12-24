@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:convert';
 import '../../data/models/cat.dart';
 import '../../data/models/reminder.dart';
 import '../../data/models/weight_record.dart';
@@ -101,14 +102,50 @@ class FirestoreService {
   Future<List<ReminderCompletion>> getCompletions() async {
     if (!isLoggedIn) return [];
     final snapshot = await _db.collection('users').doc(_userId).collection('reminder_completions').get();
-    return snapshot.docs.map((doc) => ReminderCompletion.fromMap(doc.data())).toList();
+    return snapshot.docs.map((doc) {
+      final data = Map<String, dynamic>.from(doc.data());
+      // Firestore Timestamp'leri DateTime'a çevir
+      if (data['completedDate'] is Timestamp) {
+        data['completedDate'] = (data['completedDate'] as Timestamp).toDate().toIso8601String().split('T')[0];
+      } else if (data['completedDate'] is String) {
+        // Zaten string ise olduğu gibi kullan
+      }
+      if (data['completedAt'] is Timestamp) {
+        data['completedAt'] = (data['completedAt'] as Timestamp).toDate().toIso8601String();
+      } else if (data['completedAt'] is String) {
+        // Zaten string ise olduğu gibi kullan
+      }
+      // ID'yi doc.id'den al (eğer data'da yoksa)
+      if (!data.containsKey('id') || data['id'] == null) {
+        data['id'] = doc.id;
+      }
+      return ReminderCompletion.fromMap(data);
+    }).toList();
   }
 
   // Real-time completion stream (gerçek zamanlı sync için)
   Stream<List<ReminderCompletion>> getCompletionsStream() {
     if (!isLoggedIn) return Stream.value([]);
     return _db.collection('users').doc(_userId).collection('reminder_completions').snapshots().map((snapshot) {
-      return snapshot.docs.map((doc) => ReminderCompletion.fromMap(doc.data())).toList();
+      return snapshot.docs.map((doc) {
+        final data = Map<String, dynamic>.from(doc.data());
+        // Firestore Timestamp'leri DateTime'a çevir
+        if (data['completedDate'] is Timestamp) {
+          data['completedDate'] = (data['completedDate'] as Timestamp).toDate().toIso8601String().split('T')[0];
+        } else if (data['completedDate'] is String) {
+          // Zaten string ise olduğu gibi kullan
+        }
+        if (data['completedAt'] is Timestamp) {
+          data['completedAt'] = (data['completedAt'] as Timestamp).toDate().toIso8601String();
+        } else if (data['completedAt'] is String) {
+          // Zaten string ise olduğu gibi kullan
+        }
+        // ID'yi doc.id'den al (eğer data'da yoksa)
+        if (!data.containsKey('id') || data['id'] == null) {
+          data['id'] = doc.id;
+        }
+        return ReminderCompletion.fromMap(data);
+      }).toList();
     });
   }
 

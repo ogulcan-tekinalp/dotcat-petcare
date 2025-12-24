@@ -1,14 +1,16 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/date_helper.dart';
 import '../../../core/utils/localization.dart';
-import '../../../core/services/firestore_service.dart';
-import '../../../data/database/database_helper.dart';
+import '../../../core/utils/page_transitions.dart';
 import '../../cats/providers/cats_provider.dart';
 import '../../reminders/providers/reminders_provider.dart';
+import '../../reminders/providers/completions_provider.dart';
 import '../../reminders/presentation/add_reminder_screen.dart';
 import '../../reminders/presentation/record_detail_screen.dart';
 
@@ -22,8 +24,6 @@ class CalendarScreen extends ConsumerStatefulWidget {
 class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   DateTime _focusedDay = DateTime.now();
   DateTime _selectedDay = DateTime.now();
-  Set<String> _completedDates = {};
-  final _firestore = FirestoreService();
 
   @override
   void initState() {
@@ -31,39 +31,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(remindersProvider.notifier).loadReminders();
       ref.read(catsProvider.notifier).loadCats();
-      _loadCompletions();
+      ref.read(completionsProvider.notifier).refresh();
     });
-  }
-
-  Future<void> _loadCompletions() async {
-    try {
-      final auth = FirebaseAuth.instance;
-      if (auth.currentUser != null) {
-        // Firebase'den çek
-        final cloudCompletions = await _firestore.getCompletions();
-        if (mounted) {
-          setState(() {
-            _completedDates = cloudCompletions.map((c) => c.id).toSet();
-          });
-        }
-      } else {
-        // Local DB'den çek (offline/anonim durumlar için fallback)
-        final completions = await DatabaseHelper.instance.getAllCompletedDates();
-        if (mounted) {
-          setState(() => _completedDates = completions);
-        }
-      }
-    } catch (e) {
-      // Hata durumunda local DB'den çek (fallback)
-      try {
-        final completions = await DatabaseHelper.instance.getAllCompletedDates();
-        if (mounted) {
-          setState(() => _completedDates = completions);
-        }
-      } catch (e2) {
-        // Ignore
-      }
-    }
   }
 
   // Frequency'ye göre sonraki tarihi hesapla
@@ -85,7 +54,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   }
 
   // Bir reminder için tüm occurrence'ları oluştur
-  List<Map<String, dynamic>> _generateOccurrences(dynamic reminder, DateTime rangeStart, DateTime rangeEnd) {
+  List<Map<String, dynamic>> _generateOccurrences(dynamic reminder, DateTime rangeStart, DateTime rangeEnd, Set<String> completedDates) {
     final items = <Map<String, dynamic>>[];
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -94,7 +63,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       final date = DateTime(reminder.createdAt.year, reminder.createdAt.month, reminder.createdAt.day);
       if (date.isAfter(rangeStart.subtract(const Duration(days: 1))) && date.isBefore(rangeEnd.add(const Duration(days: 1)))) {
         final key = '${reminder.id}_${date.toIso8601String().split('T')[0]}';
-        final isCompleted = _completedDates.contains(key) || reminder.isCompleted;
+        final isCompleted = completedDates.contains(key) || reminder.isCompleted;
         String status;
         if (isCompleted) {
           status = 'completed';
@@ -116,7 +85,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       
       while (current.isBefore(rangeEnd.add(const Duration(days: 1)))) {
         final key = '${reminder.id}_${current.toIso8601String().split('T')[0]}';
-        final isCompleted = _completedDates.contains(key);
+        final isCompleted = completedDates.contains(key);
         String status;
         if (isCompleted) {
           status = 'completed';
@@ -138,11 +107,12 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
 
   // Tüm günler için occurrence'ları hesapla
   Map<DateTime, List<Map<String, dynamic>>> _getEventsForMonth(DateTime monthStart, DateTime monthEnd) {
-    final reminders = ref.read(remindersProvider);
+    final reminders = ref.watch(remindersProvider);
+    final completionsState = ref.watch(completionsProvider);
     final events = <DateTime, List<Map<String, dynamic>>>{};
     
     for (final reminder in reminders) {
-      final occurrences = _generateOccurrences(reminder, monthStart, monthEnd);
+      final occurrences = _generateOccurrences(reminder, monthStart, monthEnd, completionsState.completedDates);
       for (final occ in occurrences) {
         final date = occ['date'] as DateTime;
         final day = DateTime(date.year, date.month, date.day);
@@ -196,8 +166,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
               final cat = cats.isNotEmpty ? cats.first : null;
               Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (_) => AddReminderScreen(
+                PageTransitions.fadeSlide(
+                  page: AddReminderScreen(
                     preselectedCatId: cat?.id,
                   ),
                 ),
@@ -446,8 +416,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                             onTap: () {
                               Navigator.push(
                                 context,
-                                MaterialPageRoute(
-                                  builder: (_) => RecordDetailScreen(
+                                PageTransitions.slide(
+                                  page: RecordDetailScreen(
                                     record: record,
                                     catName: cat?.name ?? '',
                                   ),
