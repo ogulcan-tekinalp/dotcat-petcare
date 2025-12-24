@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../data/models/cat.dart';
 import '../../data/models/reminder.dart';
 import '../../data/models/weight_record.dart';
+import '../../data/models/reminder_completion.dart';
 
 class FirestoreService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -80,6 +81,35 @@ class FirestoreService {
     if (!isLoggedIn) return [];
     final snapshot = await _db.collection('users').doc(_userId).collection('weights').get();
     return snapshot.docs.map((doc) => WeightRecord.fromMap(doc.data())).toList();
+  }
+
+  // ============ REMINDER COMPLETIONS ============
+  Future<void> saveCompletion(ReminderCompletion completion) async {
+    if (!isLoggedIn) {
+      throw Exception('User must be logged in to save data');
+    }
+    await _db.collection('users').doc(_userId).collection('reminder_completions').doc(completion.id).set(completion.toMap());
+  }
+
+  Future<void> deleteCompletion(String completionId) async {
+    if (!isLoggedIn) {
+      throw Exception('User must be logged in to delete data');
+    }
+    await _db.collection('users').doc(_userId).collection('reminder_completions').doc(completionId).delete();
+  }
+
+  Future<List<ReminderCompletion>> getCompletions() async {
+    if (!isLoggedIn) return [];
+    final snapshot = await _db.collection('users').doc(_userId).collection('reminder_completions').get();
+    return snapshot.docs.map((doc) => ReminderCompletion.fromMap(doc.data())).toList();
+  }
+
+  // Real-time completion stream (gerçek zamanlı sync için)
+  Stream<List<ReminderCompletion>> getCompletionsStream() {
+    if (!isLoggedIn) return Stream.value([]);
+    return _db.collection('users').doc(_userId).collection('reminder_completions').snapshots().map((snapshot) {
+      return snapshot.docs.map((doc) => ReminderCompletion.fromMap(doc.data())).toList();
+    });
   }
 
   // ============ FULL SYNC ============

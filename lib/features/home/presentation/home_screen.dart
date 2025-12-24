@@ -1,13 +1,17 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/localization.dart';
 import '../../../core/utils/date_helper.dart';
 import '../../../core/utils/notification_service.dart';
 import '../../../core/providers/language_provider.dart';
 import '../../../data/database/database_helper.dart';
+import '../../../core/services/firestore_service.dart';
+import '../../../data/models/reminder_completion.dart';
 import '../../cats/providers/cats_provider.dart';
 import '../../reminders/providers/reminders_provider.dart';
 import '../../cats/presentation/cat_detail_screen.dart';
@@ -101,10 +105,35 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     super.initState();
     // Completions'ı hemen yükle (async olarak)
     _loadCompletions();
+    // Real-time sync'i başlat
+    _setupRealtimeSync();
     // Diğer verileri de yükle
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadAllData();
     });
+  }
+
+  @override
+  void dispose() {
+    _completionsSubscription?.cancel();
+    super.dispose();
+  }
+
+  // Gerçek zamanlı sync için Firestore stream'i dinle
+  void _setupRealtimeSync() {
+    final auth = FirebaseAuth.instance;
+    if (auth.currentUser != null) {
+      _completionsSubscription = _firestore.getCompletionsStream().listen((completions) {
+        if (mounted) {
+          setState(() {
+            _completedDates = completions.map((c) => c.id).toSet();
+            _completionTimes = {for (var c in completions) c.id: c.completedAt};
+          });
+        }
+      }, onError: (error) {
+        debugPrint('HomeScreen: Realtime sync error: $error');
+      });
+    }
   }
 
   Future<void> _loadAllData() async {
@@ -122,17 +151,43 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   Future<void> _loadCompletions() async {
     try {
-      final completions = await DatabaseHelper.instance.getAllCompletedDates();
-      final completionTimes = await DatabaseHelper.instance.getCompletionTimes();
-      if (mounted) {
-        setState(() {
-          _completedDates = completions;
-          _completionTimes = completionTimes;
-        });
+      final auth = FirebaseAuth.instance;
+      if (auth.currentUser != null) {
+        // Firebase'den çek
+        final cloudCompletions = await _firestore.getCompletions();
+        if (mounted) {
+          setState(() {
+            _completedDates = cloudCompletions.map((c) => c.id).toSet();
+            _completionTimes = {for (var c in cloudCompletions) c.id: c.completedAt};
+          });
+        }
+      } else {
+        // Local DB'den çek (offline/anonim durumlar için fallback)
+        final completions = await DatabaseHelper.instance.getAllCompletedDates();
+        final completionTimes = await DatabaseHelper.instance.getCompletionTimes();
+        if (mounted) {
+          setState(() {
+            _completedDates = completions;
+            _completionTimes = completionTimes;
+          });
+        }
       }
     } catch (e, stackTrace) {
       debugPrint('HomeScreen: _loadCompletions error: $e');
       debugPrint('HomeScreen: stackTrace: $stackTrace');
+      // Hata durumunda local DB'den çek (fallback)
+      try {
+        final completions = await DatabaseHelper.instance.getAllCompletedDates();
+        final completionTimes = await DatabaseHelper.instance.getCompletionTimes();
+        if (mounted) {
+          setState(() {
+            _completedDates = completions;
+            _completionTimes = completionTimes;
+          });
+        }
+      } catch (e2) {
+        debugPrint('HomeScreen: Local DB fallback error: $e2');
+      }
     }
   }
 
@@ -1253,19 +1308,37 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   Future<void> _toggleCompletion(EventItem item) async {
     try {
-      final db = DatabaseHelper.instance;
+      final auth = FirebaseAuth.instance;
       final wasCompleted = item.isCompleted;
       
-      if (wasCompleted) {
-        // Tamamlanandan geri al
-        await db.deleteCompletion(item.reminder.id, item.date);
+      if (auth.currentUser != null) {
+        // Firebase'e kaydet
+        if (wasCompleted) {
+          // Tamamlanandan geri al
+          final completionId = '${item.reminder.id}_${item.date.toIso8601String().split('T')[0]}';
+          await _firestore.deleteCompletion(completionId);
+        } else {
+          // Tamamlandı olarak işaretle
+          final completion = ReminderCompletion(
+            id: '${item.reminder.id}_${item.date.toIso8601String().split('T')[0]}',
+            reminderId: item.reminder.id,
+            completedDate: item.date,
+            completedAt: DateTime.now(),
+          );
+          await _firestore.saveCompletion(completion);
+        }
+        // Real-time stream otomatik güncelleyecek, ama yine de yükle
+        await _loadCompletions();
       } else {
-        // Tamamlandı olarak işaretle
-        await db.insertCompletion(item.reminder.id, item.date);
+        // Local DB'ye kaydet (offline/anonim durumlar için fallback)
+        final db = DatabaseHelper.instance;
+        if (wasCompleted) {
+          await db.deleteCompletion(item.reminder.id, item.date);
+        } else {
+          await db.insertCompletion(item.reminder.id, item.date);
+        }
+        await _loadCompletions();
       }
-      
-      // Completions'ı yeniden yükle ve state'i güncelle
-      await _loadCompletions();
       
       if (mounted) {
         final isNowCompleted = !wasCompleted;

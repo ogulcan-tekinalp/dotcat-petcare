@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:table_calendar/table_calendar.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/date_helper.dart';
 import '../../../core/utils/localization.dart';
+import '../../../core/services/firestore_service.dart';
 import '../../../data/database/database_helper.dart';
 import '../../cats/providers/cats_provider.dart';
 import '../../reminders/providers/reminders_provider.dart';
@@ -21,6 +23,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   DateTime _focusedDay = DateTime.now();
   DateTime _selectedDay = DateTime.now();
   Set<String> _completedDates = {};
+  final _firestore = FirestoreService();
 
   @override
   void initState() {
@@ -33,8 +36,34 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   }
 
   Future<void> _loadCompletions() async {
-    final completions = await DatabaseHelper.instance.getAllCompletedDates();
-    setState(() => _completedDates = completions);
+    try {
+      final auth = FirebaseAuth.instance;
+      if (auth.currentUser != null) {
+        // Firebase'den çek
+        final cloudCompletions = await _firestore.getCompletions();
+        if (mounted) {
+          setState(() {
+            _completedDates = cloudCompletions.map((c) => c.id).toSet();
+          });
+        }
+      } else {
+        // Local DB'den çek (offline/anonim durumlar için fallback)
+        final completions = await DatabaseHelper.instance.getAllCompletedDates();
+        if (mounted) {
+          setState(() => _completedDates = completions);
+        }
+      }
+    } catch (e) {
+      // Hata durumunda local DB'den çek (fallback)
+      try {
+        final completions = await DatabaseHelper.instance.getAllCompletedDates();
+        if (mounted) {
+          setState(() => _completedDates = completions);
+        }
+      } catch (e2) {
+        // Ignore
+      }
+    }
   }
 
   // Frequency'ye göre sonraki tarihi hesapla
