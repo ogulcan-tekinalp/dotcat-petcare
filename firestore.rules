@@ -1,31 +1,60 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Users collection - her kullanıcı sadece kendi verilerine erişebilir
+    // Users can only read and write their own data
     match /users/{userId} {
-      // Kullanıcı kimlik doğrulaması yapılmış olmalı (anonim dahil)
+      // Allow authenticated users to read/write their own user document
       allow read, write: if request.auth != null && request.auth.uid == userId;
-      
+
       // Cats subcollection
       match /cats/{catId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
-      
+
       // Reminders subcollection
       match /reminders/{reminderId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
-      
-      // Weights subcollection
+
+      // Weight records subcollection
       match /weights/{weightId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
-      
-      // Reminder Completions subcollection
+
+      // Reminder completions subcollection
       match /reminder_completions/{completionId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
+
+      // Vaccinations subcollection
+      match /vaccinations/{vaccinationId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+
+      // Health notes subcollection
+      match /health_notes/{noteId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+
+    // Cats collection with user_cats subcollection pattern
+    match /cats/{userId}/user_cats/{catId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Reminders collection with user_reminders subcollection pattern
+    match /reminders/{userId}/user_reminders/{reminderId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Reminder completions collection
+    match /reminder_completions/{userId}/completions/{completionId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Weight records collection
+    match /weights/{userId}/user_weights/{weightId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
     }
   }
 }
-

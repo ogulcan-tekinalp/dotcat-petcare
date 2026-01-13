@@ -9,6 +9,7 @@ import '../../../core/utils/notification_service.dart';
 import '../../../core/services/firestore_service.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_text_field.dart';
+import '../../../core/widgets/app_toast.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../../cats/providers/cats_provider.dart';
 import '../providers/reminders_provider.dart';
@@ -16,8 +17,10 @@ import '../providers/reminders_provider.dart';
 class AddReminderScreen extends ConsumerStatefulWidget {
   final String? initialType;
   final String? preselectedCatId;
+  final String? initialTitle;
+  final String? initialSubType;
   final dynamic reminder; // Düzenleme modu için mevcut kayıt
-  const AddReminderScreen({super.key, this.initialType, this.preselectedCatId, this.reminder});
+  const AddReminderScreen({super.key, this.initialType, this.preselectedCatId, this.initialTitle, this.initialSubType, this.reminder});
 
   @override
   ConsumerState<AddReminderScreen> createState() => _AddReminderScreenState();
@@ -46,7 +49,9 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
     {'type': 'vaccine', 'icon': Icons.vaccines, 'color': AppColors.vaccine},
     {'type': 'medicine', 'icon': Icons.medication, 'color': AppColors.medicine},
     {'type': 'vet', 'icon': Icons.local_hospital, 'color': AppColors.vet},
+    {'type': 'grooming', 'icon': Icons.content_cut, 'color': AppColors.grooming},
     {'type': 'food', 'icon': Icons.restaurant, 'color': AppColors.food},
+    {'type': 'exercise', 'icon': Icons.fitness_center, 'color': Color(0xFFFF9800)},
     {'type': 'weight', 'icon': Icons.monitor_weight, 'color': AppColors.warning},
   ];
 
@@ -77,6 +82,8 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
     'medicine': ['internal_parasite', 'external_parasite', 'antibiotic', 'vitamin', 'other'],
     'food': ['dry_food', 'wet_food', 'supplement', 'treat', 'other'],
     'vet': ['checkup', 'emergency', 'surgery', 'dental', 'other'],
+    'grooming': ['nail_trimming', 'ear_cleaning', 'brushing', 'bathing', 'dental_care', 'eye_cleaning', 'other'],
+    'exercise': ['playtime', 'walk', 'training', 'other'],
     'weight': ['weight_check'],
   };
 
@@ -136,12 +143,49 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
       if (_selectedType == 'dotcat_complete') {
         _selectedFrequency = 'daily';
       }
-      // İlk açılışta varsa alt türlerin ilkini seç
+      
+      // İlk açılışta varsa alt türleri kontrol et
       final initialSubTypes = _subTypes[_selectedType];
       if (initialSubTypes != null && initialSubTypes.isNotEmpty) {
-        _selectedSubType = initialSubTypes.first;
-        _isOtherSubType = _selectedSubType == 'other' || _selectedSubType == 'vaccine_other';
+        // Eğer initialSubType verilmişse direkt kullan
+        if (widget.initialSubType != null && initialSubTypes.contains(widget.initialSubType)) {
+          _selectedSubType = widget.initialSubType;
+          _isOtherSubType = _selectedSubType == 'other' || _selectedSubType == 'vaccine_other';
+        }
+        // İlk başlık varsa, alt türlerle eşleşmeyi dene
+        else if (widget.initialTitle != null) {
+          String? matchedSubType;
+          
+          // Alt türlerin lokalize adlarıyla karşılaştır
+          for (final subType in initialSubTypes) {
+            final localizedName = AppLocalizations.get(subType);
+            if (localizedName.toLowerCase() == widget.initialTitle!.toLowerCase()) {
+              matchedSubType = subType;
+              break;
+            }
+          }
+          
+          if (matchedSubType != null) {
+            // Eşleşme bulundu, o alt türü seç
+            _selectedSubType = matchedSubType;
+            _isOtherSubType = matchedSubType == 'other' || matchedSubType == 'vaccine_other';
+          } else {
+            // Eşleşme yok, "other" olarak ayarla ve başlığı kullan
+            _selectedSubType = initialSubTypes.contains('other') ? 'other' : initialSubTypes.first;
+            _titleController.text = widget.initialTitle!;
+            _isOtherSubType = true;
+          }
+        } else {
+          // Başlık ve subType yok, ilk alt türü seç
+          _selectedSubType = initialSubTypes.first;
+          _isOtherSubType = _selectedSubType == 'other' || _selectedSubType == 'vaccine_other';
+        }
+      } else if (widget.initialTitle != null) {
+        // Alt tür yok ama başlık var
+        _titleController.text = widget.initialTitle!;
+        _isOtherSubType = true;
       }
+      
       // Hatırlatıcı varsayılan açık
       _enableReminder = true;
       
@@ -183,18 +227,22 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
   // Bir sonraki tekrar tarihi: frequency'ye göre hesaplanır
   DateTime? _calculateNextRecurrence() {
     if (_selectedFrequency == 'once') return null;
-    
-    switch (_selectedFrequency) {
-      case 'daily': return _selectedDate.add(const Duration(days: 1));
-      case 'weekly': return _selectedDate.add(const Duration(days: 7));
-      case 'monthly': return DateTime(_selectedDate.year, _selectedDate.month + 1, _selectedDate.day);
-      case 'quarterly': return DateTime(_selectedDate.year, _selectedDate.month + 3, _selectedDate.day);
-      case 'biannual': return DateTime(_selectedDate.year, _selectedDate.month + 6, _selectedDate.day);
-      case 'yearly': return DateTime(_selectedDate.year + 1, _selectedDate.month, _selectedDate.day);
+    return _calculateNextRecurrenceFrom(_selectedDate, _selectedFrequency);
+  }
+
+  // Belirli bir tarihten sonraki tekrar tarihini hesapla
+  DateTime? _calculateNextRecurrenceFrom(DateTime fromDate, String frequency) {
+    switch (frequency) {
+      case 'daily': return fromDate.add(const Duration(days: 1));
+      case 'weekly': return fromDate.add(const Duration(days: 7));
+      case 'monthly': return DateTime(fromDate.year, fromDate.month + 1, fromDate.day);
+      case 'quarterly': return DateTime(fromDate.year, fromDate.month + 3, fromDate.day);
+      case 'biannual': return DateTime(fromDate.year, fromDate.month + 6, fromDate.day);
+      case 'yearly': return DateTime(fromDate.year + 1, fromDate.month, fromDate.day);
       default:
-        if (_selectedFrequency.startsWith('custom_')) {
-          final days = int.tryParse(_selectedFrequency.substring(7)) ?? _customDays;
-          if (days != null) return _selectedDate.add(Duration(days: days));
+        if (frequency.startsWith('custom_')) {
+          final days = int.tryParse(frequency.substring(7)) ?? _customDays;
+          if (days != null) return fromDate.add(Duration(days: days));
         }
         return null;
     }
@@ -258,38 +306,60 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
         await FirestoreService().saveReminder(updatedReminder);
         
         // Notification'ı yeniden planla
-        await NotificationService.instance.cancelReminder(reminder.id.hashCode);
-        if (_enableReminder && !_isCompleted && reminderDate != null && reminderDate.isAfter(DateTime.now())) {
+        await NotificationService.instance.cancelReminderNotifications(reminder.id);
+        
+        // Bildirim planla: 
+        // - Etkinlik tamamlanmadıysa ve hatırlatıcı açıksa
+        // - Gelecek tarihli bir etkinlik varsa (geçmiş tarihe eklenen tekrarlayan kayıtlar için de sonraki tarih gelecekte olabilir)
+        final timeParts = timeStr.split(':');
+        final hour = int.parse(timeParts[0]);
+        final minute = int.parse(timeParts[1]);
+        final scheduledDateTime = DateTime(
+          firstEventDate.year,
+          firstEventDate.month,
+          firstEventDate.day,
+          hour,
+          minute,
+        );
+        
+        final shouldScheduleNotification = _enableReminder && 
+            !_isCompleted && 
+            scheduledDateTime.isAfter(DateTime.now());
+        
+        if (shouldScheduleNotification) {
           final cat = cats.firstWhere((c) => c.id == reminder.catId);
-          // Notification'ı yeniden planla
-          final timeParts = timeStr.split(':');
-          final hour = int.parse(timeParts[0]);
-          final minute = int.parse(timeParts[1]);
+          final notificationTitle = '🐱 $title';
+          final notificationBody = '${cat.name} için $title zamanı!';
           
           if (frequency == 'daily') {
+            final notificationId = NotificationService.instance.generateNotificationId(reminder.id);
             await NotificationService.instance.scheduleDailyReminder(
-              id: reminder.id.hashCode,
-              title: '🐱 $title',
-              body: '${cat.name} için $title zamanı!',
+              id: notificationId,
+              title: notificationTitle,
+              body: notificationBody,
               hour: hour,
               minute: minute,
             );
-          } else {
-            final scheduledDateTime = DateTime(
-              firstEventDate.year,
-              firstEventDate.month,
-              firstEventDate.day,
-              hour,
-              minute,
+          } else if (frequency == 'once') {
+            final notificationId = NotificationService.instance.generateNotificationId(reminder.id);
+            await NotificationService.instance.scheduleOneTimeReminder(
+              id: notificationId,
+              title: notificationTitle,
+              body: notificationBody,
+              dateTime: scheduledDateTime,
+              payload: reminder.id,
             );
-            if (scheduledDateTime.isAfter(DateTime.now())) {
-              await NotificationService.instance.scheduleOneTimeReminder(
-                id: reminder.id.hashCode,
-                title: '🐱 $title',
-                body: '${cat.name} için $title zamanı!',
-                dateTime: scheduledDateTime,
-              );
-            }
+          } else {
+            await NotificationService.instance.scheduleRepeatingReminder(
+              reminderId: reminder.id,
+              title: notificationTitle,
+              body: notificationBody,
+              nextOccurrence: firstEventDate,
+              hour: hour,
+              minute: minute,
+              frequency: frequency,
+              payload: reminder.id,
+            );
           }
         }
         
@@ -297,17 +367,40 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
         await ref.read(remindersProvider.notifier).loadReminders();
         
         if (mounted) {
+          AppToast.success(context, AppLocalizations.get('record_updated'));
           Navigator.pop(context);
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Row(children: [const Icon(Icons.check_circle, color: Colors.white, size: 20), const SizedBox(width: 10), Text(AppLocalizations.get('record_updated'))]),
-            backgroundColor: AppColors.success,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            margin: const EdgeInsets.all(16),
-          ));
         }
       } else {
         // Yeni kayıt modu
+        // Gelecek tarihi belirle - geçmiş tarihli tekrarlayan kayıtlar için sonraki tarihi hesapla
+        DateTime effectiveNextDate = firstEventDate;
+        final now = DateTime.now();
+        
+        if (frequency != 'once' && firstEventDate.isBefore(now)) {
+          // Geçmiş tarihli tekrarlayan kayıt - sonraki tarihi hesapla
+          DateTime tempDate = firstEventDate;
+          while (tempDate.isBefore(now)) {
+            final next = _calculateNextRecurrenceFrom(tempDate, frequency);
+            if (next == null) break;
+            tempDate = next;
+          }
+          effectiveNextDate = tempDate;
+        }
+        
+        // Bildirim planlanmalı mı kontrol et
+        final timeParts = timeStr.split(':');
+        final hour = int.parse(timeParts[0]);
+        final minute = int.parse(timeParts[1]);
+        final scheduledDateTime = DateTime(
+          effectiveNextDate.year,
+          effectiveNextDate.month,
+          effectiveNextDate.day,
+          hour,
+          minute,
+        );
+        
+        final shouldNotify = _enableReminder && scheduledDateTime.isAfter(now);
+        
         for (final catId in _selectedCatIds) {
           final cat = cats.firstWhere((c) => c.id == catId);
           await ref.read(remindersProvider.notifier).addReminder(
@@ -318,23 +411,17 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
             time: timeStr,
             frequency: frequency,
             description: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
-            notificationEnabled: _enableReminder && reminderDate != null && reminderDate.isAfter(DateTime.now()),
+            notificationEnabled: shouldNotify,
             isCompleted: _isCompleted || (_isPastDate && _selectedFrequency == 'once'),
             date: _selectedDate,
-            nextDate: firstEventDate, // İlk etkinlik tarihi!
+            nextDate: effectiveNextDate, // Hesaplanan sonraki tarih
             reminderDate: reminderDate,
           );
         }
 
         if (mounted) {
+          AppToast.success(context, AppLocalizations.get('record_saved'));
           Navigator.pop(context);
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Row(children: [const Icon(Icons.check_circle, color: Colors.white, size: 20), const SizedBox(width: 10), Text(AppLocalizations.get('record_saved'))]),
-            backgroundColor: AppColors.success,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            margin: const EdgeInsets.all(16),
-          ));
         }
       }
     } finally {
@@ -343,13 +430,11 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
   }
 
   void _showToast(String message, {bool isError = false}) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Row(children: [Icon(isError ? Icons.error : Icons.check_circle, color: Colors.white, size: 20), const SizedBox(width: 10), Expanded(child: Text(message))]),
-      backgroundColor: isError ? AppColors.error : AppColors.success,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      margin: const EdgeInsets.all(16),
-    ));
+    if (isError) {
+      AppToast.error(context, message);
+    } else {
+      AppToast.success(context, message);
+    }
   }
 
   @override
@@ -544,53 +629,58 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
   }
 
   Widget _buildTypeSelector(bool isDark) {
-    return Row(
+    return GridView.count(
+      crossAxisCount: 4,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: 8,
+      crossAxisSpacing: 8,
+      childAspectRatio: 0.95,
       children: _reminderTypes.map((type) {
         final isSelected = _selectedType == type['type'];
         final color = type['color'] as Color;
         final isDotcat = type['type'] == 'dotcat_complete';
-        return Expanded(
-          child: GestureDetector(
-            onTap: () => setState(() {
-              _selectedType = type['type'] as String;
-              _selectedSubType = null;
-              _isOtherSubType = false;
-              _titleController.clear();
-              // dotcat için daily varsayılan
-              if (_selectedType == 'dotcat_complete') {
-                _selectedFrequency = 'daily';
-              }
-              // Yeni tipe geçince, varsa ilk alt türü otomatik seç
-              final subTypesForType = _subTypes[_selectedType];
-              if (subTypesForType != null && subTypesForType.isNotEmpty) {
-                _selectedSubType = subTypesForType.first;
-                _isOtherSubType = _selectedSubType == 'other' || _selectedSubType == 'vaccine_other';
-              }
-            }),
-            child: Container(
-              margin: EdgeInsets.only(right: type != _reminderTypes.last ? 6 : 0),
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              decoration: BoxDecoration(
-                color: isSelected ? color.withOpacity(0.15) : (isDark ? AppColors.surfaceDark : Colors.white),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: isSelected ? color : Colors.grey.shade300, width: isSelected ? 2 : 1),
-              ),
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                if (isDotcat)
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(6),
-                    child: Image.asset('assets/images/logo.png', width: 32, height: 32),
-                  )
-                else
-                  Icon(type['icon'] as IconData, color: isSelected ? color : AppColors.textSecondary, size: 22),
-                const SizedBox(height: 4),
-                Text(
-                  isDotcat ? AppLocalizations.get('products') : AppLocalizations.get(type['type'] as String), 
-                  style: TextStyle(color: isSelected ? color : AppColors.textSecondary, fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal, fontSize: 10),
-                  textAlign: TextAlign.center,
-                ),
-              ]),
+        return GestureDetector(
+          onTap: () => setState(() {
+            _selectedType = type['type'] as String;
+            _selectedSubType = null;
+            _isOtherSubType = false;
+            _titleController.clear();
+            // dotcat için daily varsayılan
+            if (_selectedType == 'dotcat_complete') {
+              _selectedFrequency = 'daily';
+            }
+            // Yeni tipe geçince, varsa ilk alt türü otomatik seç
+            final subTypesForType = _subTypes[_selectedType];
+            if (subTypesForType != null && subTypesForType.isNotEmpty) {
+              _selectedSubType = subTypesForType.first;
+              _isOtherSubType = _selectedSubType == 'other' || _selectedSubType == 'vaccine_other';
+            }
+          }),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            decoration: BoxDecoration(
+              color: isSelected ? color.withOpacity(0.15) : (isDark ? AppColors.surfaceDark : Colors.white),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: isSelected ? color : Colors.grey.shade300, width: isSelected ? 2 : 1),
             ),
+            child: Column(mainAxisSize: MainAxisSize.min, mainAxisAlignment: MainAxisAlignment.center, children: [
+              if (isDotcat)
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: Image.asset('assets/images/logo.png', width: 28, height: 28),
+                )
+              else
+                Icon(type['icon'] as IconData, color: isSelected ? color : AppColors.textSecondary, size: 22),
+              const SizedBox(height: 4),
+              Text(
+                isDotcat ? AppLocalizations.get('products') : AppLocalizations.get(type['type'] as String),
+                style: TextStyle(color: isSelected ? color : AppColors.textSecondary, fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal, fontSize: 9),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ]),
           ),
         );
       }).toList(),

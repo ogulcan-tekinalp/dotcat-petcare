@@ -67,6 +67,68 @@ class DateHelper {
     return (to.difference(from).inHours / 24).round();
   }
 
+  /// Güvenli ay ekleme - gün taşmasını önler
+  /// Örnek: 31 Ocak + 1 ay = 28/29 Şubat (ayın son günü)
+  static DateTime addMonths(DateTime date, int months) {
+    int newYear = date.year;
+    int newMonth = date.month + months;
+    
+    // Yıl taşmasını hesapla
+    while (newMonth > 12) {
+      newMonth -= 12;
+      newYear++;
+    }
+    while (newMonth < 1) {
+      newMonth += 12;
+      newYear--;
+    }
+    
+    // Ayın son gününü bul
+    final lastDayOfMonth = DateTime(newYear, newMonth + 1, 0).day;
+    final newDay = date.day > lastDayOfMonth ? lastDayOfMonth : date.day;
+    
+    return DateTime(newYear, newMonth, newDay, date.hour, date.minute, date.second);
+  }
+
+  /// Güvenli yıl ekleme - 29 Şubat durumunu yönetir
+  static DateTime addYears(DateTime date, int years) {
+    final newYear = date.year + years;
+    
+    // 29 Şubat kontrolü
+    if (date.month == 2 && date.day == 29) {
+      final isLeapYear = (newYear % 4 == 0 && newYear % 100 != 0) || (newYear % 400 == 0);
+      if (!isLeapYear) {
+        return DateTime(newYear, 2, 28, date.hour, date.minute, date.second);
+      }
+    }
+    
+    return DateTime(newYear, date.month, date.day, date.hour, date.minute, date.second);
+  }
+
+  /// Frequency'ye göre sonraki tarihi hesapla
+  static DateTime? calculateNextDate(DateTime date, String frequency) {
+    switch (frequency) {
+      case 'daily':
+        return date.add(const Duration(days: 1));
+      case 'weekly':
+        return date.add(const Duration(days: 7));
+      case 'monthly':
+        return addMonths(date, 1);
+      case 'quarterly':
+        return addMonths(date, 3);
+      case 'biannual':
+        return addMonths(date, 6);
+      case 'yearly':
+        return addYears(date, 1);
+      default:
+        if (frequency.startsWith('custom_')) {
+          final days = int.tryParse(frequency.substring(7));
+          if (days != null) return date.add(Duration(days: days));
+        }
+        return null;
+    }
+  }
+
   static String getAge(DateTime birthDate) {
     final now = DateTime.now();
     int years = now.year - birthDate.year;

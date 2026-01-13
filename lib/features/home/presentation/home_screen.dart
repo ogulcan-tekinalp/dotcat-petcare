@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/localization.dart';
 import '../../../core/utils/date_helper.dart';
@@ -14,14 +16,20 @@ import '../../../core/providers/language_provider.dart';
 import '../../../core/widgets/app_chip.dart';
 import '../../../core/widgets/app_badge.dart';
 import '../../../core/constants/app_spacing.dart';
+import '../../../core/services/widget_service.dart';
+import '../../../core/widgets/app_toast.dart';
 import '../../../data/models/reminder_completion.dart';
 import '../../cats/providers/cats_provider.dart';
 import '../../reminders/providers/reminders_provider.dart';
 import '../../reminders/providers/completions_provider.dart';
-import '../../cats/presentation/cat_detail_screen.dart';
+import '../../cats/presentation/cat_profile_screen.dart';
 import '../../cats/presentation/add_cat_screen.dart';
 import '../../reminders/presentation/add_reminder_screen.dart';
 import '../../reminders/presentation/record_detail_screen.dart';
+import '../../insights/presentation/insights_screen.dart';
+import '../../insights/providers/insights_provider.dart';
+import '../../../core/services/insights_service.dart';
+import '../../../core/services/insights_notification_service.dart';
 import 'calendar_screen.dart';
 import 'settings_screen.dart';
 
@@ -159,10 +167,31 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       await ref.read(remindersProvider.notifier).loadReminders();
       // Completions'ı refresh et (merkezi provider'dan)
       await ref.read(completionsProvider.notifier).refresh();
+
+      // Check for reactivated insights and send notifications
+      await ref.read(insightsActionsProvider).checkAndNotifyReactivatedInsights();
+
+      // Widget'ı güncelle
+      _updateHomeWidget();
     } catch (e, stackTrace) {
       debugPrint('HomeScreen: _loadAllData error: $e');
       debugPrint('HomeScreen: _loadAllData stackTrace: $stackTrace');
     }
+  }
+  
+  /// Home Screen Widget'ını güncelle
+  void _updateHomeWidget() {
+    final reminders = ref.read(remindersProvider);
+    final completions = ref.read(completionsProvider);
+    
+    // Completion key'leri oluştur (CompletionsState'ten al)
+    final completedKeys = completions.completedDates;
+    
+    // Widget'ı güncelle
+    WidgetService.instance.updateTodayTasks(
+      reminders: reminders,
+      completedKeys: completedKeys,
+    );
   }
 
   // Frequency'ye göre sonraki tarihi hesapla
@@ -251,47 +280,115 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         index: _currentIndex,
         children: [_buildHomePage(), _buildCatsPage()],
       ),
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-          child: Row(
-            children: [
-              Expanded(
-                child: GestureDetector(
-                  onTap: () => setState(() => _currentIndex = 0),
-                  child: Container(
-                    height: 56,
-                    decoration: BoxDecoration(
-                      color: _currentIndex == 0 ? AppColors.primary : (isDark ? AppColors.surfaceDark : Colors.grey.shade100),
-                      borderRadius: BorderRadius.circular(16),
+      floatingActionButton: _currentIndex == 0
+          ? Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                gradient: LinearGradient(
+                  colors: [AppColors.primary, AppColors.primaryDark],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                boxShadow: AppShadows.colored(AppColors.primary),
+              ),
+              child: FloatingActionButton(
+                onPressed: _showQuickAddModal,
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                child: const Icon(Icons.add_rounded, color: Colors.white, size: 28),
+              ),
+            ).animate(onPlay: (controller) => controller.repeat(reverse: true))
+                .scaleXY(end: 1.05, duration: 2000.ms, curve: Curves.easeInOut)
+          : null,
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: isDark ? AppColors.backgroundDark.withOpacity(0.95) : Colors.white.withOpacity(0.95),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
+              blurRadius: 20,
+              offset: const Offset(0, -4),
+            ),
+          ],
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => setState(() => _currentIndex = 0),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 250),
+                      curve: Curves.easeOutCubic,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        gradient: _currentIndex == 0
+                            ? LinearGradient(
+                                colors: [AppColors.primary, AppColors.primaryDark],
+                              )
+                            : null,
+                        color: _currentIndex == 0 ? null : (isDark ? AppColors.surfaceDark.withOpacity(0.5) : Colors.grey.shade100),
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: _currentIndex == 0 ? AppShadows.colored(AppColors.primary) : null,
+                      ),
+                      child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                        Icon(
+                          Icons.home_rounded,
+                          color: _currentIndex == 0 ? Colors.white : AppColors.textSecondary,
+                          size: 24,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          AppLocalizations.get('home'),
+                          style: AppTypography.bodyLarge.copyWith(
+                            color: _currentIndex == 0 ? Colors.white : AppColors.textSecondary,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ]),
                     ),
-                    child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                      Icon(Icons.home_rounded, color: _currentIndex == 0 ? Colors.white : AppColors.textSecondary),
-                      const SizedBox(width: 8),
-                      Text(AppLocalizations.get('home'), style: TextStyle(color: _currentIndex == 0 ? Colors.white : AppColors.textSecondary, fontWeight: FontWeight.w600)),
-                    ]),
                   ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: GestureDetector(
-                  onTap: () => setState(() => _currentIndex = 1),
-                  child: Container(
-                    height: 56,
-                    decoration: BoxDecoration(
-                      color: _currentIndex == 1 ? AppColors.primary : (isDark ? AppColors.surfaceDark : Colors.grey.shade100),
-                      borderRadius: BorderRadius.circular(16),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => setState(() => _currentIndex = 1),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 250),
+                      curve: Curves.easeOutCubic,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        gradient: _currentIndex == 1
+                            ? LinearGradient(
+                                colors: [AppColors.primary, AppColors.primaryDark],
+                              )
+                            : null,
+                        color: _currentIndex == 1 ? null : (isDark ? AppColors.surfaceDark.withOpacity(0.5) : Colors.grey.shade100),
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: _currentIndex == 1 ? AppShadows.colored(AppColors.primary) : null,
+                      ),
+                      child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                        Icon(
+                          Icons.pets,
+                          color: _currentIndex == 1 ? Colors.white : AppColors.textSecondary,
+                          size: 24,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          AppLocalizations.get('my_cats'),
+                          style: AppTypography.bodyLarge.copyWith(
+                            color: _currentIndex == 1 ? Colors.white : AppColors.textSecondary,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ]),
                     ),
-                    child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                      Icon(Icons.pets, color: _currentIndex == 1 ? Colors.white : AppColors.textSecondary),
-                      const SizedBox(width: 8),
-                      Text(AppLocalizations.get('my_cats'), style: TextStyle(color: _currentIndex == 1 ? Colors.white : AppColors.textSecondary, fontWeight: FontWeight.w600)),
-                    ]),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -447,133 +544,204 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         slivers: [
           SliverAppBar(
             floating: true,
+            snap: true,
             centerTitle: false,
-            title: const Text('PetCare', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22)),
+            backgroundColor: isDark ? AppColors.backgroundDark : AppColors.backgroundLight,
+            elevation: 0,
+            title: ShaderMask(
+              shaderCallback: (bounds) => LinearGradient(
+                colors: [AppColors.primary, AppColors.primaryLight],
+              ).createShader(bounds),
+              child: Text(
+                'PetCare',
+                style: AppTypography.displayMedium.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
           actions: [
-            IconButton(
-              icon: const Icon(Icons.calendar_month_rounded),
-              tooltip: AppLocalizations.get('calendar'),
-              onPressed: () => Navigator.push(
-                context,
-                PageTransitions.slide(page: const CalendarScreen()),
+            Container(
+              margin: const EdgeInsets.only(right: 4),
+              decoration: BoxDecoration(
+                color: isDark ? AppColors.surfaceDark.withOpacity(0.5) : Colors.white.withOpacity(0.8),
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: AppShadows.small,
               ),
-            ),
-            IconButton(
-              icon: const Icon(Icons.settings_outlined),
-              onPressed: () => Navigator.push(
-                context,
-                PageTransitions.slide(page: const SettingsScreen()),
+              child: IconButton(
+                icon: const Icon(Icons.calendar_month_rounded, size: 22),
+                tooltip: AppLocalizations.get('calendar'),
+                onPressed: () => Navigator.push(
+                  context,
+                  PageTransitions.slide(page: const CalendarScreen()),
+                ),
               ),
-            ),
+            ).animate().fadeIn(duration: 300.ms).scale(delay: 100.ms),
+            // Insights button with badge
+            Container(
+              margin: const EdgeInsets.only(right: 4),
+              decoration: BoxDecoration(
+                color: isDark ? AppColors.surfaceDark.withOpacity(0.5) : Colors.white.withOpacity(0.8),
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: AppShadows.small,
+              ),
+              child: Stack(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.lightbulb_outline_rounded, size: 22),
+                    tooltip: AppLocalizations.get('insights'),
+                    onPressed: () => Navigator.push(
+                      context,
+                      PageTransitions.slide(page: const InsightsScreen()),
+                    ),
+                  ),
+                  Positioned(
+                    right: 4,
+                    top: 4,
+                    child: Consumer(
+                      builder: (context, ref, _) {
+                        final count = ref.watch(highPriorityInsightsCountProvider);
+                        if (count == 0) return const SizedBox.shrink();
+                        return Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [AppColors.error, AppColors.error.withOpacity(0.8)],
+                            ),
+                            shape: BoxShape.circle,
+                            boxShadow: AppShadows.colored(AppColors.error),
+                          ),
+                          constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                          child: Text(
+                            count.toString(),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ).animate(onPlay: (controller) => controller.repeat())
+                            .shake(duration: 500.ms)
+                            .then(delay: 3000.ms);
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ).animate().fadeIn(duration: 300.ms).scale(delay: 200.ms),
+            Container(
+              margin: const EdgeInsets.only(right: 12),
+              decoration: BoxDecoration(
+                color: isDark ? AppColors.surfaceDark.withOpacity(0.5) : Colors.white.withOpacity(0.8),
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: AppShadows.small,
+              ),
+              child: IconButton(
+                icon: const Icon(Icons.settings_outlined, size: 22),
+                onPressed: () => Navigator.push(
+                  context,
+                  PageTransitions.slide(page: const SettingsScreen()),
+                ),
+              ),
+            ).animate().fadeIn(duration: 300.ms).scale(delay: 300.ms),
           ],
         ),
-        
-        // Quick Actions - dotcat dahil
+        // Filtre butonu ve kedi slider
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+            child: Row(
               children: [
-                Text(
-                  AppLocalizations.get('add_new_record'),
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: context.textSecondary,
-                    fontWeight: FontWeight.w500,
+                // Filtre butonu
+                Container(
+                  decoration: BoxDecoration(
+                    gradient: (_selectedCatIds.isNotEmpty || _globalTypeFilter != null)
+                        ? LinearGradient(
+                            colors: [AppColors.primary, AppColors.primaryDark],
+                          )
+                        : null,
+                    color: (_selectedCatIds.isEmpty && _globalTypeFilter == null)
+                        ? (isDark ? AppColors.surfaceDark : Colors.grey.shade100)
+                        : null,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: (_selectedCatIds.isNotEmpty || _globalTypeFilter != null)
+                        ? AppShadows.colored(AppColors.primary)
+                        : null,
+                  ),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: _showFilterModal,
+                      borderRadius: BorderRadius.circular(12),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.tune_rounded,
+                              size: 20,
+                              color: (_selectedCatIds.isNotEmpty || _globalTypeFilter != null)
+                                  ? Colors.white
+                                  : (isDark ? Colors.white70 : Colors.black54),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Filtrele',
+                              style: AppTypography.bodyMedium.copyWith(
+                                color: (_selectedCatIds.isNotEmpty || _globalTypeFilter != null)
+                                    ? Colors.white
+                                    : (isDark ? Colors.white70 : Colors.black54),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            if (_selectedCatIds.isNotEmpty || _globalTypeFilter != null) ...[
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.3),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Text(
+                                  '${_selectedCatIds.length + (_globalTypeFilter != null ? 1 : 0)}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
                 ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    // dotcat ürünleri kutusu (logo + "Ürünleri")
-                    _buildDotcatProductsAction(),
-                  const SizedBox(width: 6),
-                    _buildQuickAction(
-                      icon: Icons.vaccines,
-                      label: AppLocalizations.get('vaccine'),
-                      color: AppColors.vaccine,
-                      onTap: () => _goToAddRecord('vaccine'),
+                const SizedBox(width: 12),
+
+                // Kedi slider (sadece birden fazla kedi varsa)
+                if (cats.length > 1)
+                  Expanded(
+                    child: SizedBox(
+                      height: 44,
+                      child: ListView(
+                        scrollDirection: Axis.horizontal,
+                        children: [
+                          _buildCatFilterChip(null, AppLocalizations.get('all_cats'), null),
+                          const SizedBox(width: 6),
+                          ...cats.map((cat) => Padding(
+                            padding: const EdgeInsets.only(right: 6),
+                            child: _buildCatFilterChip(cat.id, cat.name, cat.photoPath),
+                          )),
+                        ],
+                      ),
                     ),
-                  const SizedBox(width: 6),
-                    _buildQuickAction(
-                      icon: Icons.medication,
-                      label: AppLocalizations.get('medicine'),
-                      color: AppColors.medicine,
-                      onTap: () => _goToAddRecord('medicine'),
-                    ),
-                  const SizedBox(width: 6),
-                    _buildQuickAction(
-                      icon: Icons.local_hospital,
-                      label: AppLocalizations.get('vet'),
-                      color: AppColors.vet,
-                      onTap: () => _goToAddRecord('vet'),
-                    ),
-                  const SizedBox(width: 6),
-                    _buildQuickAction(
-                      icon: Icons.restaurant,
-                      label: AppLocalizations.get('food'),
-                      color: AppColors.food,
-                      onTap: () => _goToAddRecord('food'),
-                    ),
-                  ],
-                ),
+                  ),
               ],
             ),
-          ),
-        ),
-        
-        // Kedi filtresi
-        if (cats.length > 1)
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(children: [
-                  _buildCatFilterChip(null, AppLocalizations.get('all_cats'), null),
-                  const SizedBox(width: 6),
-                  ...cats.map((cat) => Padding(
-                    padding: const EdgeInsets.only(right: 6),
-                    child: _buildCatFilterChip(cat.id, cat.name, cat.photoPath),
-                  )),
-                ]),
-              ),
-            ),
-          ),
-        
-        // Tip filtresi (yalnızca türler)
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(children: [
-                      _buildFilterChip(null, AppLocalizations.get('all'), Icons.list),
-                      const SizedBox(width: 6),
-                      _buildFilterChip('dotcat_complete', 'dotcat', Icons.pets),
-                      const SizedBox(width: 6),
-                      _buildFilterChip('vaccine', AppLocalizations.get('vaccine'), Icons.vaccines),
-                      const SizedBox(width: 6),
-                      _buildFilterChip('medicine', AppLocalizations.get('medicine'), Icons.medication),
-                      const SizedBox(width: 6),
-                      _buildFilterChip('vet', AppLocalizations.get('vet'), Icons.local_hospital),
-                      const SizedBox(width: 6),
-                      _buildFilterChip('food', AppLocalizations.get('food'), Icons.restaurant),
-                    ]),
-            ),
-          ),
-        ),
-        
-        // Swipe hint
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-            child: Row(children: [
-              Icon(Icons.swipe, size: 14, color: context.textSecondary),
-              const SizedBox(width: 4),
-              Text(AppLocalizations.get('swipe_hint'), style: TextStyle(fontSize: 11, color: context.textSecondary)),
-            ]),
           ),
         ),
         
@@ -797,22 +965,50 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   Widget _buildSectionHeader(IconData icon, String title, int count, Color color) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.md, AppSpacing.md, AppSpacing.sm),
+      padding: const EdgeInsets.fromLTRB(AppSpacing.md, AppSpacing.lg, AppSpacing.md, AppSpacing.sm),
       child: Row(children: [
-        Icon(icon, color: color, size: AppSpacing.iconSm),
-        const SizedBox(width: AppSpacing.sm),
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [color.withOpacity(0.15), color.withOpacity(0.08)],
+            ),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: color, size: 20),
+        ),
+        const SizedBox(width: 12),
         Text(
           title,
-          style: TextStyle(
-            fontSize: 16,
+          style: AppTypography.titleLarge.copyWith(
             fontWeight: FontWeight.bold,
             color: icon == Icons.warning_amber_rounded ? color : null,
           ),
         ),
-        const SizedBox(width: AppSpacing.sm),
-        AppBadge(
-          text: '$count',
-          color: color,
+        const SizedBox(width: 10),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [color, color.withOpacity(0.8)],
+            ),
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: color.withOpacity(0.3),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Text(
+            '$count',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
         ),
       ]),
     );
@@ -1012,8 +1208,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         child: Container(
           decoration: BoxDecoration(
             color: isDark ? AppColors.surfaceDark : Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: borderColor, width: 2),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: borderColor.withOpacity(0.4),
+              width: 2,
+            ),
+            boxShadow: [
+              ...AppShadows.medium,
+              BoxShadow(
+                color: borderColor.withOpacity(0.1),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
           child: Column(
             children: [
@@ -1247,11 +1454,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             );
           },
           child: Container(
-            padding: const EdgeInsets.all(12),
+            padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               color: isDark ? AppColors.surfaceDark : Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: borderColor, width: 2),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: borderColor.withOpacity(0.4),
+                width: 2,
+              ),
+              boxShadow: [
+                ...AppShadows.medium,
+                BoxShadow(
+                  color: borderColor.withOpacity(0.1),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
             child: Row(children: [
               _buildCatPhoto(cat.photoPath, radius: 22, iconSize: 20),
@@ -1293,73 +1511,484 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Future<void> _toggleCompletion(EventItem item) async {
+    final wasCompleted = item.isCompleted;
+    
+    if (wasCompleted) {
+      // Geri alma işlemi - doğrudan yap
+      await _performToggleCompletion(item, wasCompleted, null);
+    } else {
+      // Tamamlama işlemi
+      // Sağlık kayıtları (aşı, ilaç, vet) için tarih sor
+      // Günlük kayıtlar (food, dotcat_complete) için direkt tamamla
+      final isHealthRecord = ['vaccine', 'medicine', 'vet'].contains(item.reminder.type);
+      
+      if (isHealthRecord && item.reminder.frequency != 'once') {
+        // Sağlık kaydı ve tekrarlayan - gerçek yapıldığı tarihi sor
+        final actualDate = await _showCompletionDatePicker(item);
+        if (actualDate != null) {
+          await _performToggleCompletion(item, wasCompleted, actualDate);
+        }
+      } else {
+        // Günlük kayıt veya tek seferlik - direkt tamamla
+        await _performToggleCompletion(item, wasCompleted, null);
+      }
+    }
+  }
+
+  /// Sağlık kayıtları için "ne zaman yapıldı?" tarih seçici
+  Future<DateTime?> _showCompletionDatePicker(EventItem item) async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    DateTime selectedDate = item.date;
+    
+    return showModalBottomSheet<DateTime>(
+      context: context,
+      backgroundColor: isDark ? AppColors.surfaceDark : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) => Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Icon(
+                item.reminder.type == 'vaccine' ? Icons.vaccines :
+                item.reminder.type == 'medicine' ? Icons.medication :
+                Icons.local_hospital,
+                color: item.reminder.type == 'vaccine' ? AppColors.vaccine :
+                       item.reminder.type == 'medicine' ? AppColors.medicine :
+                       AppColors.vet,
+                size: 40,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                AppLocalizations.get('when_was_it_done'),
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                AppLocalizations.get('next_will_be_calculated'),
+                style: TextStyle(fontSize: 13, color: context.textSecondary),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              // Tarih seçici
+              GestureDetector(
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: selectedDate,
+                    firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                    lastDate: DateTime.now(),
+                  );
+                  if (picked != null) {
+                    setModalState(() => selectedDate = picked);
+                  }
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.primary),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.calendar_today, color: AppColors.primary),
+                      const SizedBox(width: 12),
+                      Text(
+                        '${selectedDate.day}/${selectedDate.month}/${selectedDate.year}',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: Text(AppLocalizations.get('cancel')),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(ctx, selectedDate),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.success,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: Text(
+                        AppLocalizations.get('mark_completed'),
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _performToggleCompletion(EventItem item, bool wasCompleted, DateTime? actualCompletionDate) async {
     try {
-      final wasCompleted = item.isCompleted;
-      final completionId = '${item.reminder.id}_${item.date.toIso8601String().split('T')[0]}';
+      final completionDate = actualCompletionDate ?? item.date;
+      final completionId = '${item.reminder.id}_${completionDate.toIso8601String().split('T')[0]}';
       
       if (wasCompleted) {
         // Tamamlanandan geri al
         await ref.read(completionsProvider.notifier).deleteCompletion(
           completionId,
           item.reminder.id,
-          item.date,
+          completionDate,
         );
       } else {
         // Tamamlandı olarak işaretle
         final completion = ReminderCompletion(
           id: completionId,
           reminderId: item.reminder.id,
-          completedDate: item.date,
+          completedDate: completionDate,
           completedAt: DateTime.now(),
         );
         await ref.read(completionsProvider.notifier).saveCompletion(completion);
+        
+        // Sağlık kaydı ise ve tekrarlayan ise, sonraki tarihi güncelle
+        final isHealthRecord = ['vaccine', 'medicine', 'vet'].contains(item.reminder.type);
+        if (isHealthRecord && item.reminder.frequency != 'once' && actualCompletionDate != null) {
+          // Sonraki tarihi gerçek tamamlanma tarihine göre hesapla
+          await ref.read(remindersProvider.notifier).updateNextDateFromCompletion(
+            item.reminder.id,
+            actualCompletionDate,
+          );
+        }
       }
     
+      // Widget'ı güncelle
+      _updateHomeWidget();
+      
       if (mounted) {
         final isNowCompleted = !wasCompleted;
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Row(children: [
-            Icon(isNowCompleted ? Icons.check_circle : Icons.undo, color: Colors.white, size: 20), 
-            const SizedBox(width: 10), 
-            Text(isNowCompleted ? AppLocalizations.get('marked_completed') : AppLocalizations.get('marked_pending'))
-          ]),
-          backgroundColor: isNowCompleted ? AppColors.success : AppColors.warning,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          margin: const EdgeInsets.all(16),
-        ));
+        if (isNowCompleted) {
+          AppToast.success(context, AppLocalizations.get('marked_completed'));
+        } else {
+          AppToast.warning(context, AppLocalizations.get('marked_pending'));
+        }
       }
     } catch (e, stackTrace) {
-      debugPrint('HomeScreen: _toggleCompletion error: $e');
+      debugPrint('HomeScreen: _performToggleCompletion error: $e');
       debugPrint('HomeScreen: stackTrace: $stackTrace');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Error: $e'),
-          backgroundColor: AppColors.error,
-          behavior: SnackBarBehavior.floating,
-        ));
+        AppToast.error(context, 'Error: $e');
       }
     }
+  }
+
+  void _showFilterModal() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cats = ref.read(catsProvider);
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: isDark ? AppColors.surfaceDark : Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Handle
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // Title
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Filtrele',
+                  style: AppTypography.headlineLarge.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                if (_selectedCatIds.isNotEmpty || _globalTypeFilter != null)
+                  TextButton(
+                    onPressed: () {
+                      setState(() {
+                        _selectedCatIds.clear();
+                        _globalTypeFilter = null;
+                      });
+                      Navigator.pop(context);
+                    },
+                    child: Text('Temizle'),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 24),
+
+            // Kedi Filtresi
+            if (cats.length > 1) ...[
+              Text(
+                'Kediler',
+                style: AppTypography.titleMedium.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: cats.map((cat) {
+                  final isSelected = _selectedCatIds.contains(cat.id);
+                  return FilterChip(
+                    label: Text(cat.name),
+                    selected: isSelected,
+                    onSelected: (selected) {
+                      setState(() {
+                        if (selected) {
+                          _selectedCatIds.add(cat.id);
+                        } else {
+                          _selectedCatIds.remove(cat.id);
+                        }
+                      });
+                      Navigator.pop(context);
+                    },
+                    backgroundColor: isDark ? AppColors.surfaceDark : Colors.grey.shade100,
+                    selectedColor: AppColors.primary.withOpacity(0.2),
+                    checkmarkColor: AppColors.primary,
+                    labelStyle: TextStyle(
+                      color: isSelected ? AppColors.primary : (isDark ? Colors.white70 : Colors.black87),
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 24),
+            ],
+
+            // Tip Filtresi
+            Text(
+              'Hatırlatıcı Tipi',
+              style: AppTypography.titleMedium.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _buildFilterChipModal('dotcat_complete', 'dotcat', Icons.pets, isDark),
+                _buildFilterChipModal('vaccine', AppLocalizations.get('vaccine'), Icons.vaccines, isDark),
+                _buildFilterChipModal('medicine', AppLocalizations.get('medicine'), Icons.medication, isDark),
+                _buildFilterChipModal('vet', AppLocalizations.get('vet'), Icons.local_hospital, isDark),
+                _buildFilterChipModal('food', AppLocalizations.get('food'), Icons.restaurant, isDark),
+                _buildFilterChipModal('grooming', AppLocalizations.get('grooming'), Icons.content_cut, isDark),
+                _buildFilterChipModal('exercise', 'Egzersiz', Icons.fitness_center, isDark),
+              ],
+            ),
+            SizedBox(height: MediaQuery.of(context).padding.bottom + 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterChipModal(String type, String label, IconData icon, bool isDark) {
+    final isSelected = _globalTypeFilter == type;
+    return FilterChip(
+      label: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: isSelected ? AppColors.primary : (isDark ? Colors.white70 : Colors.black54)),
+          const SizedBox(width: 6),
+          Text(label),
+        ],
+      ),
+      selected: isSelected,
+      onSelected: (selected) {
+        setState(() {
+          _globalTypeFilter = selected ? type : null;
+        });
+        Navigator.pop(context);
+      },
+      backgroundColor: isDark ? AppColors.surfaceDark : Colors.grey.shade100,
+      selectedColor: AppColors.primary.withOpacity(0.2),
+      checkmarkColor: AppColors.primary,
+      labelStyle: TextStyle(
+        color: isSelected ? AppColors.primary : (isDark ? Colors.white70 : Colors.black87),
+        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+      ),
+    );
+  }
+
+  void _showQuickAddModal() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: isDark ? AppColors.surfaceDark : Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Yeni Kayıt Ekle',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 24),
+            GridView.count(
+              shrinkWrap: true,
+              crossAxisCount: 3,
+              mainAxisSpacing: 12,
+              crossAxisSpacing: 12,
+              children: [
+                _buildQuickActionGrid(Icons.star_rounded, 'DotCat', AppColors.primary, () => _goToAddRecord('dotcat_complete')),
+                _buildQuickActionGrid(Icons.vaccines, 'Aşı', AppColors.vaccine, () => _goToAddRecord('vaccine')),
+                _buildQuickActionGrid(Icons.medication, 'İlaç', AppColors.medicine, () => _goToAddRecord('medicine')),
+                _buildQuickActionGrid(Icons.local_hospital, 'Veteriner', AppColors.vet, () => _goToAddRecord('vet')),
+                _buildQuickActionGrid(Icons.content_cut, 'Tıraş', AppColors.grooming, () => _goToAddRecord('grooming')),
+                _buildQuickActionGrid(Icons.restaurant, 'Mama', AppColors.food, () => _goToAddRecord('food')),
+                _buildQuickActionGrid(Icons.fitness_center, 'Egzersiz', const Color(0xFFFF9800), () => _goToAddRecord('exercise')),
+                _buildQuickActionGrid(Icons.monitor_weight, 'Kilo', AppColors.warning, () => _goToAddRecord('weight')),
+              ],
+            ),
+            SizedBox(height: MediaQuery.of(context).padding.bottom + 16),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuickActionGrid(IconData icon, String label, Color color, VoidCallback onTap) {
+    final isDotCat = label == 'DotCat';
+
+    return InkWell(
+      onTap: () {
+        Navigator.pop(context);
+        onTap();
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [color.withOpacity(0.15), color.withOpacity(0.05)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withOpacity(0.3), width: 1.5),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [color, color.withOpacity(0.8)],
+                ),
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: color.withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: isDotCat
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.asset('assets/images/logo.png', width: 28, height: 28),
+                    )
+                  : Icon(icon, color: Colors.white, size: 24),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              style: AppTypography.bodySmall.copyWith(
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _goToAddRecord(String type) async {
     final cats = ref.read(catsProvider);
     if (cats.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(AppLocalizations.get('add_cat_first')),
-        backgroundColor: AppColors.warning,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        margin: const EdgeInsets.all(16),
-        action: SnackBarAction(
-          label: AppLocalizations.get('add'),
-          textColor: Colors.white,
-          onPressed: () => Navigator.push(
-            context,
-            PageTransitions.fadeSlide(page: const AddCatScreen()),
-          ),
+      AppToast.show(
+        context, 
+        message: AppLocalizations.get('add_cat_first'),
+        type: ToastType.warning,
+        onTap: () => Navigator.push(
+          context,
+          PageTransitions.fadeSlide(page: const AddCatScreen()),
         ),
-      ));
+      );
       return;
     }
     
@@ -1393,11 +2022,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       PageTransitions.fadeSlide(page: AddReminderScreen(initialType: type)),
                     );
                   } else if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                      content: Text(AppLocalizations.get('notification_permission_required')),
-                      backgroundColor: AppColors.error,
-                      behavior: SnackBarBehavior.floating,
-                    ));
+                    AppToast.error(context, AppLocalizations.get('notification_permission_required'));
                   }
                 },
                 style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
@@ -1521,14 +2146,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   child: GestureDetector(
                     onTap: () => Navigator.push(
                       context,
-                      PageTransitions.slide(page: CatDetailScreen(cat: cat)),
+                      PageTransitions.slide(page: CatProfileScreen(cat: cat)),
                     ),
                     child: Container(
-                      padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(18),
                       decoration: BoxDecoration(
                         color: isDark ? AppColors.surfaceDark : Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [if (!isDark) BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 2))],
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: isDark ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.2),
+                          width: 1,
+                        ),
+                        boxShadow: AppShadows.large,
                       ),
                       child: Row(children: [
                         _buildCatPhoto(cat.photoPath, radius: 32, iconSize: 28),
@@ -1577,4 +2206,5 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ],
     );
   }
+
 }

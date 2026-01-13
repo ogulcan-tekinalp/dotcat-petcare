@@ -5,6 +5,7 @@ class Cat {
   final String name;
   final DateTime birthDate;
   final String? breed;
+  final String? gender; // 'male', 'female', 'unknown'
   final double? weight;
   final String? photoPath;
   final String? notes;
@@ -15,6 +16,7 @@ class Cat {
     required this.name,
     required this.birthDate,
     this.breed,
+    this.gender,
     this.weight,
     this.photoPath,
     this.notes,
@@ -40,6 +42,7 @@ class Cat {
       'name': name,
       'birthDate': birthDate.toIso8601String(),
       'breed': breed,
+      'gender': gender,
       'weight': weight,
       'photoPath': photoPath,
       'notes': notes,
@@ -53,6 +56,7 @@ class Cat {
       name: map['name'] as String,
       birthDate: DateTime.parse(map['birthDate'] as String),
       breed: map['breed'] as String?,
+      gender: map['gender'] as String?,
       weight: map['weight'] as double?,
       photoPath: map['photoPath'] as String?,
       notes: map['notes'] as String?,
@@ -64,6 +68,7 @@ class Cat {
     String? name,
     DateTime? birthDate,
     String? breed,
+    String? gender,
     double? weight,
     String? photoPath,
     String? notes,
@@ -73,6 +78,7 @@ class Cat {
       name: name ?? this.name,
       birthDate: birthDate ?? this.birthDate,
       breed: breed ?? this.breed,
+      gender: gender ?? this.gender,
       weight: weight ?? this.weight,
       photoPath: photoPath ?? this.photoPath,
       notes: notes ?? this.notes,

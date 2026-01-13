@@ -137,6 +137,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             title: Text(AppLocalizations.get('sign_out'), style: const TextStyle(color: AppColors.error)),
             onTap: () => _signOut(context, ref),
           ),
+          const Divider(height: 1),
+          ListTile(
+            leading: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(color: AppColors.error.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+              child: const Icon(Icons.delete_forever, color: AppColors.error, size: 20),
+            ),
+            title: Text(AppLocalizations.get('delete_account'), style: const TextStyle(color: AppColors.error)),
+            onTap: () => _showDeleteAccountDialog(context, ref, isDark),
+          ),
         ]),
       );
     } else {
@@ -195,6 +205,96 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         MaterialPageRoute(builder: (_) => const LoginScreen()),
         (route) => false,
       );
+    }
+  }
+
+  void _showDeleteAccountDialog(BuildContext context, WidgetRef ref, bool isDark) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: isDark ? AppColors.surfaceDark : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 28),
+            const SizedBox(width: 12),
+            Expanded(child: Text(AppLocalizations.get('delete_account'), style: const TextStyle(fontSize: 18))),
+          ],
+        ),
+        content: Text(
+          AppLocalizations.get('delete_account_warning'),
+          style: TextStyle(color: context.textSecondary, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(AppLocalizations.get('cancel')),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await _deleteAccount(context, ref);
+            },
+            child: Text(
+              AppLocalizations.get('delete'),
+              style: const TextStyle(color: AppColors.error, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _deleteAccount(BuildContext context, WidgetRef ref) async {
+    // Show loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final success = await ref.read(authServiceProvider).deleteAccount();
+      
+      if (context.mounted) {
+        Navigator.pop(context); // Close loading
+        
+        if (success) {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setBool('hasSkippedLogin', false);
+          
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(AppLocalizations.get('account_deleted')),
+                backgroundColor: AppColors.success,
+              ),
+            );
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(builder: (_) => const LoginScreen()),
+              (route) => false,
+            );
+          }
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(AppLocalizations.get('delete_account_error')),
+              backgroundColor: AppColors.error,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.pop(context); // Close loading
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppLocalizations.get('delete_account_reauth')),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
     }
   }
 

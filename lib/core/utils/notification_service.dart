@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
@@ -6,18 +8,85 @@ import 'package:timezone/data/latest.dart' as tz_data;
 class NotificationService {
   static final NotificationService instance = NotificationService._init();
   final _notifications = FlutterLocalNotificationsPlugin();
+  bool _isInitialized = false;
 
   NotificationService._init();
 
+  /// Generate a unique notification ID from reminder ID and optional date
+  /// This ensures each reminder instance gets a unique notification ID
+  int generateNotificationId(String reminderId, {DateTime? date}) {
+    if (date != null) {
+      // For recurring notifications, include date in the hash
+      final dateStr = '${date.year}${date.month}${date.day}';
+      return '$reminderId-$dateStr'.hashCode.abs() % 2147483647;
+    }
+    return reminderId.hashCode.abs() % 2147483647;
+  }
+
+  /// Create a rich payload for notification navigation
+  /// Contains all info needed to navigate to the correct screen
+  String createPayload({
+    required String reminderId,
+    String? catId,
+    String? type,
+    DateTime? date,
+  }) {
+    return jsonEncode({
+      'reminderId': reminderId,
+      if (catId != null) 'catId': catId,
+      if (type != null) 'type': type,
+      if (date != null) 'date': date.toIso8601String(),
+    });
+  }
+
+  /// Parse notification payload
+  Map<String, dynamic>? parsePayload(String? payload) {
+    if (payload == null || payload.isEmpty) return null;
+    try {
+      // Try JSON first
+      return jsonDecode(payload) as Map<String, dynamic>;
+    } catch (e) {
+      // Fallback: assume it's just the reminder ID
+      return {'reminderId': payload};
+    }
+  }
+
   Future<void> init() async {
+    if (_isInitialized) {
+      debugPrint('NotificationService: Already initialized');
+      return;
+    }
+    
     tz_data.initializeTimeZones();
     // Kullanıcının sistem timezone'unu kullan
     try {
-      final localLocation = tz.local;
-      tz.setLocalLocation(localLocation);
+      // Try to detect local timezone
+      final now = DateTime.now();
+      final localOffset = now.timeZoneOffset;
+      
+      // Find matching timezone
+      bool found = false;
+      for (final location in tz.timeZoneDatabase.locations.values) {
+        try {
+          final tzNow = tz.TZDateTime.now(location);
+          if (tzNow.timeZoneOffset == localOffset) {
+            tz.setLocalLocation(location);
+            found = true;
+            debugPrint('NotificationService: Using timezone: ${location.name}');
+            break;
+          }
+        } catch (_) {}
+      }
+      
+      if (!found) {
+        // Fallback: Istanbul timezone for Turkey
+        tz.setLocalLocation(tz.getLocation('Europe/Istanbul'));
+        debugPrint('NotificationService: Fallback to Europe/Istanbul');
+      }
     } catch (e) {
-      // Fallback: Istanbul timezone
+      // Ultimate fallback
       tz.setLocalLocation(tz.getLocation('Europe/Istanbul'));
+      debugPrint('NotificationService: Error detecting timezone, using Europe/Istanbul: $e');
     }
 
     const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -40,6 +109,7 @@ class NotificationService {
       },
     );
     
+    _isInitialized = initialized ?? false;
     debugPrint('NotificationService: Initialized: $initialized');
 
     // Android için bildirim kanallarını oluştur
@@ -245,6 +315,7 @@ class NotificationService {
     required String title,
     required String body,
     required DateTime dateTime,
+    String? payload,
   }) async {
     // İzin kontrolü
     final hasPermission = await requestPermission();
@@ -258,7 +329,7 @@ class NotificationService {
       final now = tz.TZDateTime.now(tz.local);
 
       if (scheduled.isBefore(now)) {
-        debugPrint('NotificationService: Scheduled time is in the past, skipping');
+        debugPrint('NotificationService: Scheduled time is in the past, skipping - scheduled: $scheduled, now: $now');
         return;
       }
 
@@ -267,8 +338,8 @@ class NotificationService {
         title,
         body,
         scheduled,
-        const NotificationDetails(
-          android: AndroidNotificationDetails(
+        NotificationDetails(
+          android: const AndroidNotificationDetails(
             'dotcat_events',
             'Etkinlikler',
             channelDescription: 'DOTCAT onemli etkinlikler',
@@ -278,7 +349,7 @@ class NotificationService {
             enableVibration: true,
             showWhen: true,
           ),
-          iOS: DarwinNotificationDetails(
+          iOS: const DarwinNotificationDetails(
             presentAlert: true,
             presentBadge: true,
             presentSound: true,
@@ -287,10 +358,140 @@ class NotificationService {
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
+        payload: payload,
       );
-      debugPrint('NotificationService: One-time reminder scheduled successfully - id: $id');
+      debugPrint('NotificationService: One-time reminder scheduled successfully - id: $id, dateTime: $scheduled');
     } catch (e) {
       debugPrint('NotificationService: Error scheduling one-time reminder: $e');
+    }
+  }
+
+  /// Schedule a repeating reminder based on frequency
+  /// This handles weekly, monthly, yearly etc. by scheduling the next occurrence
+  Future<void> scheduleRepeatingReminder({
+    required String reminderId,
+    required String title,
+    required String body,
+    required DateTime nextOccurrence,
+    required int hour,
+    required int minute,
+    required String frequency,
+    String? payload,
+  }) async {
+    final hasPermission = await requestPermission();
+    if (!hasPermission) {
+      debugPrint('NotificationService: Permission not granted for repeating reminder');
+      return;
+    }
+
+    try {
+      // Calculate the exact notification time
+      final scheduledDateTime = DateTime(
+        nextOccurrence.year,
+        nextOccurrence.month,
+        nextOccurrence.day,
+        hour,
+        minute,
+      );
+      
+      final now = DateTime.now();
+      
+      if (scheduledDateTime.isBefore(now)) {
+        debugPrint('NotificationService: Next occurrence is in the past, skipping - scheduled: $scheduledDateTime');
+        return;
+      }
+
+      final notificationId = generateNotificationId(reminderId, date: nextOccurrence);
+      
+      // For weekly reminders, we can use the built-in weekly repeat
+      if (frequency == 'weekly') {
+        final scheduled = tz.TZDateTime.from(scheduledDateTime, tz.local);
+        await _notifications.zonedSchedule(
+          notificationId,
+          title,
+          body,
+          scheduled,
+          const NotificationDetails(
+            android: AndroidNotificationDetails(
+              'dotcat_reminders',
+              'Hatirlaticilar',
+              channelDescription: 'DOTCAT hatirlaticilari',
+              importance: Importance.high,
+              priority: Priority.high,
+              playSound: true,
+              enableVibration: true,
+              showWhen: true,
+            ),
+            iOS: DarwinNotificationDetails(
+              presentAlert: true,
+              presentBadge: true,
+              presentSound: true,
+            ),
+          ),
+          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+          uiLocalNotificationDateInterpretation:
+              UILocalNotificationDateInterpretation.absoluteTime,
+          matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
+          payload: payload,
+        );
+        debugPrint('NotificationService: Weekly reminder scheduled - id: $notificationId, dateTime: $scheduled');
+      } else {
+        // For other frequencies (monthly, yearly, custom), schedule a one-time notification
+        // The app will reschedule the next one when this fires or when opened
+        await scheduleOneTimeReminder(
+          id: notificationId,
+          title: title,
+          body: body,
+          dateTime: scheduledDateTime,
+          payload: payload,
+        );
+        debugPrint('NotificationService: Repeating reminder ($frequency) scheduled as one-time - id: $notificationId');
+      }
+    } catch (e) {
+      debugPrint('NotificationService: Error scheduling repeating reminder: $e');
+    }
+  }
+
+  /// Get all pending notifications (for debugging)
+  Future<List<PendingNotificationRequest>> getPendingNotifications() async {
+    return await _notifications.pendingNotificationRequests();
+  }
+
+  /// Cancel all notifications for a specific reminder
+  Future<void> cancelReminderNotifications(String reminderId) async {
+    try {
+      // Önce pending bildirimleri al
+      final pending = await _notifications.pendingNotificationRequests();
+      
+      // Base notification ID
+      final baseId = reminderId.hashCode.abs() % 2147483647;
+      
+      // Aynı anda iptal edilecek ID'leri topla
+      final idsToCancel = <int>[baseId];
+      
+      // Pending listesinden bu reminder'a ait olanları bul
+      // Reminder ID'si payload'da veya başlıkta olabilir
+      for (final notification in pending) {
+        if (notification.payload == reminderId) {
+          idsToCancel.add(notification.id);
+        }
+      }
+      
+      // Ayrıca gelecek 30 gün için tarihli ID'leri de ekle (daha verimli)
+      final now = DateTime.now();
+      for (int i = 0; i < 30; i++) {
+        final date = now.add(Duration(days: i));
+        idsToCancel.add(generateNotificationId(reminderId, date: date));
+      }
+      
+      // Tümünü paralel olarak iptal et
+      await Future.wait(
+        idsToCancel.toSet().map((id) => _notifications.cancel(id)),
+      );
+      
+      debugPrint('NotificationService: Cancelled ${idsToCancel.length} notifications for reminder $reminderId');
+    } catch (e) {
+      debugPrint('NotificationService: Error cancelling notifications: $e');
     }
   }
 
@@ -322,9 +523,20 @@ class NotificationService {
 
   Future<void> cancelReminder(int id) async {
     await _notifications.cancel(id);
+    debugPrint('NotificationService: Cancelled notification with id: $id');
   }
 
   Future<void> cancelAllReminders() async {
     await _notifications.cancelAll();
+    debugPrint('NotificationService: Cancelled all notifications');
+  }
+
+  /// Debug: Print all pending notifications
+  Future<void> debugPrintPendingNotifications() async {
+    final pending = await getPendingNotifications();
+    debugPrint('NotificationService: Pending notifications count: ${pending.length}');
+    for (final notification in pending) {
+      debugPrint('  - ID: ${notification.id}, Title: ${notification.title}, Body: ${notification.body}');
+    }
   }
 }

@@ -1,10 +1,48 @@
 import 'package:flutter/material.dart';
 
+/// Modern shadow definitions
+class AppShadows {
+  static List<BoxShadow> get small => [
+    BoxShadow(
+      color: Colors.black.withOpacity(0.04),
+      blurRadius: 8,
+      offset: const Offset(0, 2),
+    ),
+  ];
+
+  static List<BoxShadow> get medium => [
+    BoxShadow(
+      color: Colors.black.withOpacity(0.08),
+      blurRadius: 16,
+      offset: const Offset(0, 4),
+    ),
+  ];
+
+  static List<BoxShadow> get large => [
+    BoxShadow(
+      color: Colors.black.withOpacity(0.12),
+      blurRadius: 24,
+      offset: const Offset(0, 8),
+    ),
+  ];
+
+  static List<BoxShadow> colored(Color color) => [
+    BoxShadow(
+      color: color.withOpacity(0.3),
+      blurRadius: 20,
+      offset: const Offset(0, 8),
+    ),
+  ];
+}
+
 class AppColors {
-  // Light mode colors
-  static const primary = Color(0xFF3AB8C7);  // Logo turquoise
-  static const secondary = Color(0xFF2EC4A0);
-  static const accent = Color(0xFF3498DB);
+  // Light mode colors - Modern palette
+  static const primary = Color(0xFF6366F1);  // Modern indigo
+  static const primaryLight = Color(0xFF818CF8);
+  static const primaryDark = Color(0xFF4F46E5);
+
+  static const secondary = Color(0xFF10B981);  // Emerald
+  static const accent = Color(0xFFF59E0B);  // Amber
   
   static const backgroundLight = Color(0xFFF5F8FA);
   static const surfaceLight = Colors.white;
@@ -21,19 +59,93 @@ class AppColors {
   static const textPrimary = Color(0xFF2D3436);
   static const textSecondary = Color(0xFF636E72);
   
-  // Shared colors
-  static const success = Color(0xFF2EC4A0);
-  static const error = Color(0xFFE74C3C);
-  static const warning = Color(0xFFFFC107);
-  static const info = Color(0xFF3AB8C7);
-  
-  static const food = Color(0xFF3498DB);
-  static const vaccine = Color(0xFF2EC4A0);
-  static const weight = Color(0xFF9B59B6);
-  static const health = Color(0xFFE74C3C);
-  static const medicine = Color(0xFFE67E22);
-  static const vet = Color(0xFF1ABC9C);
-  static const dotcat = Color(0xFF9B59B6);  // Purple for dotcat brand
+  // Shared colors - Modern
+  static const success = Color(0xFF10B981);  // Emerald
+  static const error = Color(0xFFEF4444);  // Red
+  static const warning = Color(0xFFF59E0B);  // Amber
+  static const info = Color(0xFF3B82F6);  // Blue
+
+  // Reminder type colors - Vibrant & Modern
+  static const food = Color(0xFFF59E0B);  // Amber
+  static const vaccine = Color(0xFF10B981);  // Emerald
+  static const weight = Color(0xFF8B5CF6);  // Violet
+  static const health = Color(0xFFEF4444);  // Red
+  static const medicine = Color(0xFFF97316);  // Orange
+  static const vet = Color(0xFF14B8A6);  // Teal
+  static const dotcat = Color(0xFF6366F1);  // Indigo
+  static const grooming = Color(0xFFEC4899);  // Pink
+  static const exercise = Color(0xFFFB923C);  // Orange
+}
+
+/// Modern typography scale
+class AppTypography {
+  static const TextStyle displayLarge = TextStyle(
+    fontSize: 32,
+    fontWeight: FontWeight.bold,
+    height: 1.2,
+    letterSpacing: -0.5,
+  );
+
+  static const TextStyle displayMedium = TextStyle(
+    fontSize: 28,
+    fontWeight: FontWeight.bold,
+    height: 1.3,
+    letterSpacing: -0.3,
+  );
+
+  static const TextStyle headlineLarge = TextStyle(
+    fontSize: 24,
+    fontWeight: FontWeight.bold,
+    height: 1.3,
+  );
+
+  static const TextStyle headlineMedium = TextStyle(
+    fontSize: 20,
+    fontWeight: FontWeight.w600,
+    height: 1.4,
+  );
+
+  static const TextStyle titleLarge = TextStyle(
+    fontSize: 18,
+    fontWeight: FontWeight.w600,
+    height: 1.4,
+  );
+
+  static const TextStyle titleMedium = TextStyle(
+    fontSize: 16,
+    fontWeight: FontWeight.w600,
+    height: 1.5,
+  );
+
+  static const TextStyle bodyLarge = TextStyle(
+    fontSize: 16,
+    fontWeight: FontWeight.normal,
+    height: 1.5,
+  );
+
+  static const TextStyle bodyMedium = TextStyle(
+    fontSize: 14,
+    fontWeight: FontWeight.normal,
+    height: 1.5,
+  );
+
+  static const TextStyle bodySmall = TextStyle(
+    fontSize: 12,
+    fontWeight: FontWeight.normal,
+    height: 1.4,
+  );
+
+  static const TextStyle labelLarge = TextStyle(
+    fontSize: 14,
+    fontWeight: FontWeight.w600,
+    height: 1.4,
+  );
+
+  static const TextStyle labelMedium = TextStyle(
+    fontSize: 12,
+    fontWeight: FontWeight.w600,
+    height: 1.3,
+  );
 }
 
 class AppTheme {

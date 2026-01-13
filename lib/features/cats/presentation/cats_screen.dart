@@ -11,7 +11,7 @@ import '../../../core/widgets/app_button.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../providers/cats_provider.dart';
 import 'add_cat_screen.dart';
-import 'cat_detail_screen.dart';
+import 'cat_profile_screen.dart';
 
 class CatsScreen extends ConsumerWidget {
   const CatsScreen({super.key});
@@ -57,7 +57,7 @@ class CatsScreen extends ConsumerWidget {
     return AppCard(
       onTap: () => Navigator.push(
         context,
-        PageTransitions.slide(page: CatDetailScreen(cat: cat)),
+        PageTransitions.slide(page: CatProfileScreen(cat: cat)),
       ),
       margin: const EdgeInsets.only(bottom: AppSpacing.md),
       child: Row(

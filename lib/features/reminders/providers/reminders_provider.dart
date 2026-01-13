@@ -4,17 +4,20 @@ import 'package:uuid/uuid.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../../data/models/reminder.dart';
 import '../../../core/utils/notification_service.dart';
+import '../../../core/utils/date_helper.dart';
 import '../../../core/services/firestore_service.dart';
+import '../../cats/providers/cats_provider.dart';
 
 final remindersProvider = StateNotifierProvider<RemindersNotifier, List<Reminder>>((ref) {
-  return RemindersNotifier();
+  return RemindersNotifier(ref);
 });
 
 class RemindersNotifier extends StateNotifier<List<Reminder>> {
-  RemindersNotifier() : super([]) {
+  RemindersNotifier(this._ref) : super([]) {
     loadReminders();
   }
 
+  final Ref _ref;
   final _firestore = FirestoreService();
   final _uuid = const Uuid();
 
@@ -26,10 +29,21 @@ class RemindersNotifier extends StateNotifier<List<Reminder>> {
         final cloudReminders = await _firestore.getReminders();
         state = cloudReminders;
         
-        // Reschedule all active reminders on app start
-        for (final reminder in cloudReminders.where((r) => r.isActive && !r.isCompleted)) {
-          await _scheduleNotificationForReminder(reminder);
+        // Reschedule reminders on app start
+        // Daily reminders: her zaman planla (tamamlanmış olsa bile yarın çalacak)
+        // Diğer tekrarlayan reminders: aktif ve tamamlanmamışsa planla
+        // Once reminders: sadece aktif ve tamamlanmamışsa planla
+        for (final reminder in cloudReminders) {
+          if (reminder.frequency == 'daily' && reminder.isActive) {
+            // Daily reminder - tamamlanmış olsa bile her gün çalacak
+            await _scheduleNotificationForReminder(reminder);
+          } else if (reminder.isActive && !reminder.isCompleted) {
+            // Diğer aktif ve tamamlanmamış reminders
+            await _scheduleNotificationForReminder(reminder);
+          }
         }
+        
+        debugPrint('RemindersProvider: Loaded ${cloudReminders.length} reminders, scheduled notifications');
       } else {
         // Giriş yapılmamışsa boş liste
         state = [];
@@ -40,47 +54,95 @@ class RemindersNotifier extends StateNotifier<List<Reminder>> {
     }
   }
 
+  /// Cat'e ait reminder'ları yükle (state'i değiştirmez, sadece notification schedule yapar)
+  /// Tüm reminder'lar zaten loadReminders() ile yüklü, bu method sadece
+  /// belirli bir cat için notification scheduling yapmak için kullanılabilir
   Future<void> loadRemindersForCat(String catId) async {
-    // Bu metod artık state'i değiştirmiyor
-    // Cat detail screen zaten ref.watch ile tüm reminder'ları alıp filtreliyor
-    // State'i değiştirmek diğer ekranlardaki verileri siliyordu - bu bug düzeltildi
+    // Cat detail screen için: ref.watch(remindersProvider) ile tüm reminders alınıp
+    // .where((r) => r.catId == catId) ile filtreleniyor.
+    // Bu yaklaşım daha performanslı çünkü state değişimi gerektirmiyor.
+    //
+    // Eğer sadece bu cat'in notification'larını reschedule etmek istersek:
+    final catReminders = state.where((r) => r.catId == catId).toList();
+    for (final reminder in catReminders) {
+      if (reminder.isActive && !reminder.isCompleted) {
+        await _scheduleNotificationForReminder(reminder);
+      }
+    }
   }
 
   Future<void> _scheduleNotificationForReminder(Reminder reminder, {String? catName}) async {
     final timeParts = reminder.time.split(':');
     final hour = int.parse(timeParts[0]);
     final minute = int.parse(timeParts[1]);
-    final name = catName ?? 'Kediniz';
+
+    // Get cat name from catsProvider if not provided
+    String name = catName ?? 'Kediniz';
+    if (catName == null) {
+      final cats = _ref.read(catsProvider);
+      final cat = cats.where((c) => c.id == reminder.catId).firstOrNull;
+      if (cat != null) {
+        name = cat.name;
+      }
+    }
     
     // Calculate next occurrence
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     DateTime? nextDate = _getNextOccurrence(reminder, today);
     
-    if (nextDate == null) return;
+    if (nextDate == null) {
+      debugPrint('RemindersProvider: No next date for reminder ${reminder.id}');
+      return;
+    }
     
     final scheduledDateTime = DateTime(nextDate.year, nextDate.month, nextDate.day, hour, minute);
     
+    debugPrint('RemindersProvider: Scheduling notification for ${reminder.title} at $scheduledDateTime (frequency: ${reminder.frequency})');
+    
     // Only schedule if in the future
     if (scheduledDateTime.isAfter(now)) {
+      final notificationTitle = '🐱 ${reminder.title}';
+      final notificationBody = '$name için ${reminder.title.toLowerCase()} zamanı!';
+      
       if (reminder.frequency == 'daily') {
-        // For daily reminders, use repeating notification
+        // For daily reminders, use repeating daily notification
+        final notificationId = NotificationService.instance.generateNotificationId(reminder.id);
         await NotificationService.instance.scheduleDailyReminder(
-          id: reminder.id.hashCode,
-          title: '🐱 ${reminder.title}',
-          body: '$name için ${reminder.title.toLowerCase()} zamanı!',
+          id: notificationId,
+          title: notificationTitle,
+          body: notificationBody,
           hour: hour,
           minute: minute,
         );
-      } else {
-        // For other frequencies, schedule one-time and reschedule on completion
+        debugPrint('RemindersProvider: Daily reminder scheduled with id: $notificationId');
+      } else if (reminder.frequency == 'once') {
+        // For one-time reminders
+        final notificationId = NotificationService.instance.generateNotificationId(reminder.id);
         await NotificationService.instance.scheduleOneTimeReminder(
-          id: reminder.id.hashCode,
-          title: '🐱 ${reminder.title}',
-          body: '$name için ${reminder.title.toLowerCase()} zamanı!',
+          id: notificationId,
+          title: notificationTitle,
+          body: notificationBody,
           dateTime: scheduledDateTime,
+          payload: reminder.id,
         );
+        debugPrint('RemindersProvider: One-time reminder scheduled with id: $notificationId');
+      } else {
+        // For other frequencies (weekly, monthly, etc.), use repeating reminder
+        await NotificationService.instance.scheduleRepeatingReminder(
+          reminderId: reminder.id,
+          title: notificationTitle,
+          body: notificationBody,
+          nextOccurrence: nextDate,
+          hour: hour,
+          minute: minute,
+          frequency: reminder.frequency,
+          payload: reminder.id,
+        );
+        debugPrint('RemindersProvider: Repeating reminder (${reminder.frequency}) scheduled');
       }
+    } else {
+      debugPrint('RemindersProvider: Scheduled time is in the past: $scheduledDateTime');
     }
   }
   
@@ -100,20 +162,8 @@ class RemindersNotifier extends StateNotifier<List<Reminder>> {
   }
 
   DateTime? _calculateNextFromDate(DateTime date, String frequency) {
-    switch (frequency) {
-      case 'daily': return date.add(const Duration(days: 1));
-      case 'weekly': return date.add(const Duration(days: 7));
-      case 'monthly': return DateTime(date.year, date.month + 1, date.day);
-      case 'quarterly': return DateTime(date.year, date.month + 3, date.day);
-      case 'biannual': return DateTime(date.year, date.month + 6, date.day);
-      case 'yearly': return DateTime(date.year + 1, date.month, date.day);
-      default:
-        if (frequency.startsWith('custom_')) {
-          final days = int.tryParse(frequency.substring(7));
-          if (days != null) return date.add(Duration(days: days));
-        }
-        return null;
-    }
+    // DateHelper'ı kullan - gün taşması sorunlarını çözer
+    return DateHelper.calculateNextDate(date, frequency);
   }
 
   Future<Reminder> addReminder({
@@ -158,7 +208,11 @@ class RemindersNotifier extends StateNotifier<List<Reminder>> {
       await _firestore.saveReminder(reminder);
       
       // Schedule notification
-      if (notificationEnabled && !isCompleted) {
+      // Daily reminders: her zaman planla (yarın çalacak)
+      // Diğerleri: notificationEnabled ve tamamlanmamışsa planla
+      if (frequency == 'daily' && !isCompleted) {
+        await _scheduleNotificationForReminder(reminder, catName: catName);
+      } else if (notificationEnabled && !isCompleted) {
         await _scheduleNotificationForReminder(reminder, catName: catName);
       }
 
@@ -170,12 +224,25 @@ class RemindersNotifier extends StateNotifier<List<Reminder>> {
     }
   }
 
-  Future<void> toggleReminder(Reminder reminder) async {
+  /// Toggle reminder completion status
+  /// [actualCompletionDate] - Gerçek tamamlanma tarihi (sağlık kayıtları için)
+  /// Bu tarih, sonraki occurrence hesaplamasında baz alınır
+  Future<void> toggleReminder(Reminder reminder, {DateTime? actualCompletionDate}) async {
     final newIsCompleted = !reminder.isCompleted;
+    
+    // Calculate next occurrence for repeating reminders
+    DateTime? newNextDate = reminder.nextDate;
+    if (newIsCompleted && reminder.frequency != 'once') {
+      // When marking as completed, calculate next occurrence
+      // Eğer actualCompletionDate verilmişse onu kullan (sağlık kayıtları için)
+      final baseDate = actualCompletionDate ?? reminder.nextDate ?? reminder.createdAt;
+      newNextDate = _calculateNextFromDate(baseDate, reminder.frequency);
+    }
     
     Reminder updated = reminder.copyWith(
       isCompleted: newIsCompleted, 
       isActive: !newIsCompleted,
+      nextDate: newNextDate,
     );
     
     try {
@@ -183,10 +250,28 @@ class RemindersNotifier extends StateNotifier<List<Reminder>> {
       await _firestore.saveReminder(updated);
       
       if (newIsCompleted) {
-        // Tamamlandı - bildirimi iptal et
-        await NotificationService.instance.cancelReminder(reminder.id.hashCode);
+        // Tamamlandı olarak işaretlendi
+        if (reminder.frequency == 'once') {
+          // Tek seferlik reminder - bildirimi iptal et
+          await NotificationService.instance.cancelReminderNotifications(reminder.id);
+        } else {
+          // Tekrarlayan reminder - günlük bildirimler çalışmaya devam etsin
+          // Sadece sonraki tarihi güncelle, bildirimi iptal ETME
+          // Daily reminder zaten her gün çalacak şekilde ayarlı
+          if (reminder.frequency != 'daily' && newNextDate != null) {
+            // Daily olmayan tekrarlayan reminder'lar için sonraki bildirimi planla
+            final nextReminder = updated.copyWith(
+              isCompleted: false,
+              isActive: true,
+              nextDate: newNextDate,
+            );
+            await _scheduleNotificationForReminder(nextReminder);
+          }
+          // Daily reminder için: matchDateTimeComponents: DateTimeComponents.time
+          // kullandığımız için her gün otomatik çalacak, iptal etmeye gerek yok
+        }
       } else {
-        // Geri alındı - bildirimi tekrar planla
+        // Geri alındı - bildirimi tekrar planla (eğer iptal edilmişse)
         await _scheduleNotificationForReminder(updated);
       }
 
@@ -201,7 +286,8 @@ class RemindersNotifier extends StateNotifier<List<Reminder>> {
     try {
       // Sadece Firebase'den sil
       await _firestore.deleteReminder(id);
-      await NotificationService.instance.cancelReminder(id.hashCode);
+      // Tüm ilgili bildirimleri iptal et
+      await NotificationService.instance.cancelReminderNotifications(id);
       state = state.where((r) => r.id != id).toList();
     } catch (e) {
       debugPrint('RemindersProvider: Error deleting reminder from Firestore: $e');
@@ -216,5 +302,37 @@ class RemindersNotifier extends StateNotifier<List<Reminder>> {
 
   List<Reminder> getRemindersForCat(String catId) {
     return state.where((r) => r.catId == catId).toList();
+  }
+
+  /// Tamamlama tarihine göre sonraki tarihi güncelle
+  /// Sağlık kayıtları (aşı, ilaç, vet) için kullanılır
+  Future<void> updateNextDateFromCompletion(String reminderId, DateTime actualCompletionDate) async {
+    try {
+      final reminder = state.firstWhere((r) => r.id == reminderId);
+      
+      // Sonraki tarihi gerçek tamamlanma tarihine göre hesapla
+      final nextDate = _calculateNextFromDate(actualCompletionDate, reminder.frequency);
+      
+      if (nextDate != null) {
+        final updated = reminder.copyWith(
+          nextDate: nextDate,
+          isCompleted: false, // Sonraki için bekliyor
+          isActive: true,
+        );
+        
+        // Firebase'e kaydet
+        await _firestore.saveReminder(updated);
+        
+        // Yeni tarih için bildirim planla
+        await _scheduleNotificationForReminder(updated);
+        
+        // State'i güncelle
+        state = state.map((r) => r.id == reminderId ? updated : r).toList();
+        
+        debugPrint('RemindersProvider: Updated next date for $reminderId to $nextDate (based on completion: $actualCompletionDate)');
+      }
+    } catch (e) {
+      debugPrint('RemindersProvider: Error updating next date from completion: $e');
+    }
   }
 }

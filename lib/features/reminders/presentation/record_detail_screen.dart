@@ -188,17 +188,7 @@ class _RecordDetailScreenState extends ConsumerState<RecordDetailScreen> {
               AppButton(
                 label: _isCompleted ? AppLocalizations.get('completed') : AppLocalizations.get('mark_completed'),
                 icon: _isCompleted ? Icons.check_circle_rounded : Icons.schedule_rounded,
-                onPressed: () async {
-                  setState(() => _isCompleted = !_isCompleted);
-                  await ref.read(remindersProvider.notifier).toggleReminder(widget.record);
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                      content: Text(_isCompleted ? AppLocalizations.get('marked_completed') : AppLocalizations.get('marked_pending')),
-                      backgroundColor: _isCompleted ? AppColors.success : AppColors.primary,
-                      behavior: SnackBarBehavior.floating,
-                    ));
-                  }
-                },
+                onPressed: () => _handleToggleCompletion(),
                 variant: ButtonVariant.filled,
                 color: _isCompleted ? AppColors.success : AppColors.warning,
                 height: AppSpacing.buttonHeightLg + 10,
@@ -638,6 +628,161 @@ class _RecordDetailScreenState extends ConsumerState<RecordDetailScreen> {
           ]),
           const SizedBox(height: 12),
         ]),
+      ),
+    );
+  }
+  
+  /// Tamamlama işlemini yönet - sağlık kayıtları için tarih sor
+  Future<void> _handleToggleCompletion() async {
+    final wasCompleted = _isCompleted;
+    
+    if (wasCompleted) {
+      // Geri alma - doğrudan yap
+      setState(() => _isCompleted = !_isCompleted);
+      await ref.read(remindersProvider.notifier).toggleReminder(widget.record);
+      _showCompletionFeedback();
+    } else {
+      // Tamamlama - sağlık kayıtları için tarih sor
+      final isHealthRecord = ['vaccine', 'medicine', 'vet'].contains(widget.record.type);
+      
+      if (isHealthRecord && widget.record.frequency != 'once') {
+        final actualDate = await _showCompletionDatePicker();
+        if (actualDate != null) {
+          setState(() => _isCompleted = !_isCompleted);
+          await ref.read(remindersProvider.notifier).toggleReminder(widget.record, actualCompletionDate: actualDate);
+          _showCompletionFeedback();
+        }
+      } else {
+        setState(() => _isCompleted = !_isCompleted);
+        await ref.read(remindersProvider.notifier).toggleReminder(widget.record);
+        _showCompletionFeedback();
+      }
+    }
+  }
+  
+  void _showCompletionFeedback() {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(_isCompleted ? AppLocalizations.get('marked_completed') : AppLocalizations.get('marked_pending')),
+        backgroundColor: _isCompleted ? AppColors.success : AppColors.primary,
+        behavior: SnackBarBehavior.floating,
+      ));
+    }
+  }
+  
+  /// Sağlık kayıtları için "ne zaman yapıldı?" tarih seçici
+  Future<DateTime?> _showCompletionDatePicker() async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    DateTime selectedDate = widget.record.nextDate ?? DateTime.now();
+    
+    return showModalBottomSheet<DateTime>(
+      context: context,
+      backgroundColor: isDark ? AppColors.surfaceDark : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) => Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Icon(
+                widget.record.type == 'vaccine' ? Icons.vaccines :
+                widget.record.type == 'medicine' ? Icons.medication :
+                Icons.local_hospital,
+                color: widget.record.type == 'vaccine' ? AppColors.vaccine :
+                       widget.record.type == 'medicine' ? AppColors.medicine :
+                       AppColors.vet,
+                size: 40,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                AppLocalizations.get('when_was_it_done'),
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                AppLocalizations.get('next_will_be_calculated'),
+                style: TextStyle(fontSize: 13, color: context.textSecondary),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              // Tarih seçici
+              GestureDetector(
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: selectedDate,
+                    firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                    lastDate: DateTime.now(),
+                  );
+                  if (picked != null) {
+                    setModalState(() => selectedDate = picked);
+                  }
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.primary),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.calendar_today, color: AppColors.primary),
+                      const SizedBox(width: 12),
+                      Text(
+                        DateHelper.formatDate(selectedDate),
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
+                      child: Text(AppLocalizations.get('cancel')),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(context, selectedDate),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
+                      child: Text(AppLocalizations.get('confirm')),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+            ],
+          ),
+        ),
       ),
     );
   }

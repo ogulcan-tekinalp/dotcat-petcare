@@ -1,5 +1,6 @@
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -7,18 +8,88 @@ import 'core/theme/app_theme.dart';
 import 'core/utils/notification_service.dart';
 import 'core/utils/localization.dart';
 import 'core/providers/language_provider.dart';
+import 'core/services/sync_service.dart';
+import 'core/services/fcm_service.dart';
+import 'core/services/widget_service.dart';
 import 'features/onboarding/presentation/splash_screen.dart';
 
 // Theme mode provider
 final themeModeProvider = StateProvider<ThemeMode>((ref) => ThemeMode.system);
 
+// Sync state provider
+final syncStateProvider = StreamProvider<SyncState>((ref) {
+  return SyncService.instance.syncStateStream;
+});
+
+// Firebase initialization state
+final firebaseInitProvider = FutureProvider<bool>((ref) async {
+  try {
+    await Firebase.initializeApp();
+    return true;
+  } catch (e) {
+    debugPrint('Firebase init error: $e');
+    return false;
+  }
+});
+
+// App initialization state
+class AppInitState {
+  final bool firebaseReady;
+  final String? error;
+  
+  AppInitState({required this.firebaseReady, this.error});
+}
+
+final appInitProvider = FutureProvider<AppInitState>((ref) async {
+  String? error;
+  bool firebaseReady = false;
+  
+  // 1. Firebase init
+  try {
+    await Firebase.initializeApp();
+    firebaseReady = true;
+    debugPrint('✅ Firebase initialized');
+  } catch (e) {
+    error = 'Firebase init failed: $e';
+    debugPrint('❌ $error');
+  }
+  
+  // 2. Other services (only if Firebase is ready)
+  if (firebaseReady) {
+    try {
+      await NotificationService.instance.init();
+      debugPrint('✅ NotificationService initialized');
+    } catch (e) {
+      debugPrint('⚠️ NotificationService init error: $e');
+    }
+    
+    try {
+      await SyncService.instance.init();
+      debugPrint('✅ SyncService initialized');
+    } catch (e) {
+      debugPrint('⚠️ SyncService init error: $e');
+    }
+    
+    try {
+      await FCMService.instance.init();
+      debugPrint('✅ FCMService initialized');
+    } catch (e) {
+      debugPrint('⚠️ FCMService init error: $e');
+    }
+    
+    try {
+      await WidgetService.instance.init();
+      debugPrint('✅ WidgetService initialized');
+    } catch (e) {
+      debugPrint('⚠️ WidgetService init error: $e');
+    }
+  }
+  
+  return AppInitState(firebaseReady: firebaseReady, error: error);
+});
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // Firebase init
-  await Firebase.initializeApp();
-  
-  await NotificationService.instance.init();
   
   // Set language based on system locale
   final systemLocale = ui.PlatformDispatcher.instance.locale.languageCode;
@@ -40,6 +111,7 @@ class DotcatApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     ref.watch(languageProvider);
     final themeMode = ref.watch(themeModeProvider);
+    final appInit = ref.watch(appInitProvider);
     
     Locale locale;
     switch (AppLocalizations.currentLanguage) {
@@ -69,7 +141,122 @@ class DotcatApp extends ConsumerWidget {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      home: const SplashScreen(),
+      home: appInit.when(
+        loading: () => const _LoadingScreen(),
+        error: (error, stack) => _ErrorScreen(error: error.toString()),
+        data: (state) {
+          if (!state.firebaseReady) {
+            return _ErrorScreen(error: state.error ?? 'Firebase başlatılamadı');
+          }
+          return const SplashScreen();
+        },
+      ),
+    );
+  }
+}
+
+/// Loading screen while app initializes
+class _LoadingScreen extends StatelessWidget {
+  const _LoadingScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Image.asset('assets/images/logo.png', height: 80),
+            const SizedBox(height: 24),
+            const CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Yükleniyor...',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Error screen when Firebase fails
+class _ErrorScreen extends StatelessWidget {
+  final String error;
+  
+  const _ErrorScreen({required this.error});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    color: AppColors.error.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.error_outline,
+                    color: AppColors.error,
+                    size: 40,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                const Text(
+                  'Uygulama Başlatılamadı',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Lütfen internet bağlantınızı kontrol edin ve uygulamayı yeniden başlatın.',
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 14,
+                    height: 1.5,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    error,
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 12,
+                      fontFamily: 'monospace',
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

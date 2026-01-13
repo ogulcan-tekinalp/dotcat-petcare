@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">DOTCAT</string>
+    <string name="widget_description">Günlük kedi bakım görevlerini takip edin</string>
+    <string name="widget_name">DOTCAT Görevler</string>
+</resources>
+

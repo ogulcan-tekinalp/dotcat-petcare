@@ -1,6 +1,9 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/localization.dart';
 import '../../../core/utils/page_transitions.dart';
@@ -9,56 +12,14 @@ import '../../../core/widgets/app_text_field.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../../../core/services/auth_service.dart';
 import '../../home/presentation/home_screen.dart';
-
-// Google Logo Widget - Basit G harfi
-class GoogleLogoPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint();
-    
-    // Google'ın mavi rengi
-    paint.color = const Color(0xFF4285F4);
-    paint.style = PaintingStyle.fill;
-    
-    // Basit G harfi şekli
-    final path = Path();
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.width * 0.35;
-    
-    // Dış daire (mavi)
-    canvas.drawCircle(center, radius, paint);
-    
-    // İç beyaz daire
-    paint.color = Colors.white;
-    canvas.drawCircle(center, radius * 0.6, paint);
-    
-    // G harfinin çizgisi (mavi)
-    paint.color = const Color(0xFF4285F4);
-    paint.style = PaintingStyle.stroke;
-    paint.strokeWidth = size.width * 0.12;
-    paint.strokeCap = StrokeCap.round;
-    
-    // G harfinin yatay çizgisi
-    canvas.drawLine(
-      Offset(center.dx, center.dy),
-      Offset(center.dx + radius * 0.4, center.dy),
-      paint,
-    );
-    
-    // G harfinin dikey çizgisi
-    canvas.drawLine(
-      Offset(center.dx + radius * 0.4, center.dy),
-      Offset(center.dx + radius * 0.4, center.dy + radius * 0.3),
-      paint,
-    );
-  }
-  
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
+import '../../cats/providers/cats_provider.dart';
+import '../../reminders/providers/reminders_provider.dart';
+import '../../reminders/providers/completions_provider.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
-  const LoginScreen({super.key});
+  final bool isOnboardingComplete;
+
+  const LoginScreen({super.key, this.isOnboardingComplete = false});
 
   @override
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
@@ -114,20 +75,44 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
     }
   }
 
-  Future<void> _signInAnonymously() async {
+  Future<void> _signInWithApple() async {
     setState(() { _isLoading = true; _error = null; });
 
     try {
       final authService = ref.read(authServiceProvider);
-      final result = await authService.signInAnonymously();
+      final result = await authService.signInWithApple();
       
       if (result != null && mounted) {
         _goToHome();
       } else if (mounted) {
-        setState(() => _error = AppLocalizations.get('login_error'));
+        setState(() => _error = AppLocalizations.get('login_cancelled'));
+      }
+    } on FirebaseAuthException catch (e) {
+      debugPrint('🔴 Apple Sign In Firebase Error in UI:');
+      debugPrint('   Code: ${e.code}');
+      debugPrint('   Message: ${e.message}');
+      debugPrint('   Details: $e');
+      if (mounted) {
+        String errorMessage;
+        switch (e.code) {
+          case 'invalid-credential':
+          case 'operation-not-allowed':
+            errorMessage = 'Apple ile giriş şu anda kullanılamıyor.\n\nHata kodu: ${e.code}\nDetay: ${e.message}';
+            break;
+          case 'user-disabled':
+            errorMessage = 'Bu hesap devre dışı bırakılmış. Lütfen destek ile iletişime geçin.';
+            break;
+          case 'network-request-failed':
+            errorMessage = 'İnternet bağlantınızı kontrol edin ve tekrar deneyin.';
+            break;
+          default:
+            errorMessage = 'Giriş hatası.\n\nHata kodu: ${e.code}\nDetay: ${e.message}';
+        }
+        setState(() => _error = errorMessage);
       }
     } catch (e) {
-      if (mounted) setState(() => _error = AppLocalizations.get('login_error'));
+      debugPrint('🔴 Apple Sign In Unknown Error in UI: $e');
+      if (mounted) setState(() => _error = 'Beklenmeyen hata: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -190,7 +175,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
 
 
 
-  void _goToHome() {
+  Future<void> _goToHome() async {
+    // Login sonrası provider'ları yeniden yükle
+    try {
+      debugPrint('LoginScreen: Refreshing providers after login...');
+      await ref.read(catsProvider.notifier).loadCats();
+      await ref.read(remindersProvider.notifier).loadReminders();
+      await ref.read(completionsProvider.notifier).refresh();
+      debugPrint('LoginScreen: Providers refreshed successfully');
+    } catch (e) {
+      debugPrint('LoginScreen: Error refreshing providers: $e');
+    }
+
+    // Kullanıcının en az bir kez login olduğunu kaydet
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('hasEverLoggedIn', true);
+    debugPrint('LoginScreen: Marked hasEverLoggedIn = true');
+
+    if (!mounted) return;
+
     Navigator.pushReplacement(
       context,
       PageTransitions.fade(page: const HomeScreen()),
@@ -208,29 +211,57 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
           opacity: _fadeAnim,
           child: SlideTransition(
             position: _slideAnim,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32),
-              child: Column(
-                children: [
-                  const Spacer(flex: 2),
-                  
-                  // Logo - büyük ve arkaplansız
-                  Image.asset('assets/images/logo.png', height: 120),
-                  const SizedBox(height: 24),
-                  
-                  // App Name
-                  const Text('PetCare', style: TextStyle(fontSize: 36, fontWeight: FontWeight.bold, letterSpacing: -0.5)),
-                  const SizedBox(height: 8),
-                  
-                  // Tagline
-                  Text(
-                    AppLocalizations.get('login_tagline'),
-                    style: TextStyle(fontSize: 16, color: context.textSecondary, height: 1.4),
-                    textAlign: TextAlign.center,
-                  ),
-                  
-                  const Spacer(flex: 2),
-                  
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                    child: IntrinsicHeight(
+                      child: Column(
+                        children: [
+                          const Spacer(flex: 2),
+                          
+                          // Logo - büyük ve arkaplansız
+                          Image.asset('assets/images/logo.png', height: 100),
+                          const SizedBox(height: 20),
+                          
+                          // App Name
+                          const Text('PetCare', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, letterSpacing: -0.5)),
+                          const SizedBox(height: 8),
+                          
+                          // Tagline
+                          Text(
+                            AppLocalizations.get('login_tagline'),
+                            style: TextStyle(fontSize: 15, color: context.textSecondary, height: 1.4),
+                            textAlign: TextAlign.center,
+                          ),
+                          
+                          const Spacer(flex: 2),
+
+                  // Onboarding complete message
+                  if (widget.isOnboardingComplete) ...[
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: AppColors.primary.withOpacity(0.3)),
+                      ),
+                      child: Row(children: [
+                        const Icon(Icons.check_circle_outline, color: AppColors.primary, size: 22),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'Kedinizi başarıyla kaydettik! Şimdi hesabınızı oluşturun ve verilerinizi güvende tutun.',
+                            style: TextStyle(color: AppColors.primary, fontSize: 14),
+                          ),
+                        ),
+                      ]),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+
                   // Error
                   if (_error != null) ...[
                     Container(
@@ -247,6 +278,57 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
                       ]),
                     ),
                     const SizedBox(height: 20),
+                  ],
+                  
+                  // Apple Sign In Button (iOS only)
+                  if (Platform.isIOS) ...[
+                    SizedBox(
+                      width: double.infinity,
+                      height: AppSpacing.buttonHeightLg,
+                      child: OutlinedButton(
+                        onPressed: _isLoading ? null : _signInWithApple,
+                        style: OutlinedButton.styleFrom(
+                          backgroundColor: isDark ? Colors.white : Colors.black,
+                          foregroundColor: isDark ? Colors.black : Colors.white,
+                          side: BorderSide.none,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
+                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                        ),
+                        child: _isLoading
+                            ? SizedBox(
+                                width: AppSpacing.iconSm,
+                                height: AppSpacing.iconSm,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    isDark ? Colors.black : Colors.white,
+                                  ),
+                                ),
+                              )
+                            : Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.apple,
+                                    size: 24,
+                                    color: isDark ? Colors.black : Colors.white,
+                                  ),
+                                  const SizedBox(width: AppSpacing.sm),
+                                  Text(
+                                    AppLocalizations.get('sign_in_apple'),
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: isDark ? Colors.black : Colors.white,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
                   ],
                   
                   // Google Sign In Button
@@ -382,32 +464,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
                     ),
                   ),
                   
-                  const SizedBox(height: 16),
                   
-                  // Divider
-                  Row(children: [
-                    Expanded(child: Divider(color: Colors.grey.shade300)),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Text(AppLocalizations.get('or'), style: TextStyle(color: context.textSecondary, fontSize: 13)),
+                          const SizedBox(height: 24),
+                        ],
+                      ),
                     ),
-                    Expanded(child: Divider(color: Colors.grey.shade300)),
-                  ]),
-                  
-                  const SizedBox(height: 16),
-                  
-                  // Anonymous Sign In Button
-                  AppButton(
-                    label: AppLocalizations.get('sign_in_anonymous'),
-                    onPressed: _signInAnonymously,
-                    variant: ButtonVariant.outlined,
-                    isLoading: _isLoading,
-                    height: AppSpacing.buttonHeightLg,
                   ),
-                  
-                  const Spacer(),
-                ],
-              ),
+                );
+              },
             ),
           ),
         ),

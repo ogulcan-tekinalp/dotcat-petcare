@@ -1,7 +1,7 @@
 name: dotcat
 description: "dotcat PetCare - Cat Care Assistant"
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.0.0+2
 
 environment:
   sdk: ^3.10.3
@@ -28,15 +28,23 @@ dependencies:
   firebase_auth: ^5.3.4
   cloud_firestore: ^5.5.1
   firebase_storage: ^12.3.4
+  firebase_messaging: ^15.1.6
   google_sign_in: ^6.2.2
+  sign_in_with_apple: ^6.1.3
   # Calendar
   table_calendar: ^3.1.2
-  # UI & Design
-  cached_network_image: ^3.3.1
+  cached_network_image: ^3.4.1
+  crypto: ^3.0.7
+  # Charts for weight trends
+  fl_chart: ^0.69.2
+  # Home Screen Widgets
+  home_widget: ^0.7.0
+  # Animations & Effects
+  lottie: ^3.1.3
   shimmer: ^3.0.0
-  lottie: ^3.0.0
-  confetti: ^0.7.0
-  flutter_staggered_grid_view: ^0.7.0
+  confetti: ^0.8.0
+  flutter_animate: ^4.5.2
+  vibration: ^2.0.1
 
 dev_dependencies:
   flutter_test:

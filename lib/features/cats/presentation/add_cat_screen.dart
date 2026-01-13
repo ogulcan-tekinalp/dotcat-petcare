@@ -26,6 +26,7 @@ class _AddCatScreenState extends ConsumerState<AddCatScreen> {
   final _weightController = TextEditingController();
   final _notesController = TextEditingController();
   DateTime _birthDate = DateTime.now().subtract(const Duration(days: 365));
+  String? _selectedGender; // 'male', 'female', 'unknown'
   File? _photoFile;
   String? _savedPhotoPath;
   bool _isLoading = false;
@@ -54,7 +55,7 @@ class _AddCatScreenState extends ConsumerState<AddCatScreen> {
       // Kırpma işlemi
       final croppedFile = await ImageCropper().cropImage(
         sourcePath: image.path,
-        aspectRatio: CropAspectRatio(ratioX: 1, ratioY: 1),
+        compressQuality: 90,
         uiSettings: [
           AndroidUiSettings(
             toolbarTitle: AppLocalizations.get('edit_photo'),
@@ -63,11 +64,21 @@ class _AddCatScreenState extends ConsumerState<AddCatScreen> {
             initAspectRatio: CropAspectRatioPreset.square,
             lockAspectRatio: false,
             hideBottomControls: false,
+            aspectRatioPresets: [
+              CropAspectRatioPreset.square,
+              CropAspectRatioPreset.ratio4x3,
+              CropAspectRatioPreset.original,
+            ],
           ),
           IOSUiSettings(
             title: AppLocalizations.get('edit_photo'),
             aspectRatioLockEnabled: false,
             resetAspectRatioEnabled: true,
+            aspectRatioPresets: [
+              CropAspectRatioPreset.square,
+              CropAspectRatioPreset.ratio4x3,
+              CropAspectRatioPreset.original,
+            ],
           ),
         ],
       );
@@ -156,6 +167,7 @@ class _AddCatScreenState extends ConsumerState<AddCatScreen> {
         name: _nameController.text.trim(),
         birthDate: _birthDate,
         breed: _breedController.text.trim().isEmpty ? null : _breedController.text.trim(),
+        gender: _selectedGender,
         weight: _weightController.text.trim().isEmpty ? null : double.tryParse(_weightController.text.trim().replaceAll(',', '.')),
         photoPath: null, // Önce null, sonra URL ile güncellenecek
         notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
@@ -342,6 +354,26 @@ class _AddCatScreenState extends ConsumerState<AddCatScreen> {
             ),
             const SizedBox(height: 16),
 
+            // Gender
+            _buildLabel('Cinsiyet', false),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildGenderOption('male', 'Erkek', Icons.male, isDark),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildGenderOption('female', 'Dişi', Icons.female, isDark),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildGenderOption('unknown', 'Bilinmiyor', Icons.help_outline, isDark),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
             // Weight
             _buildLabel(AppLocalizations.get('weight_kg'), false),
             const SizedBox(height: 6),
@@ -394,6 +426,48 @@ class _AddCatScreenState extends ConsumerState<AddCatScreen> {
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
       enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade300)),
       focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: AppColors.primary, width: 2)),
+    );
+  }
+
+  Widget _buildGenderOption(String value, String label, IconData icon, bool isDark) {
+    final isSelected = _selectedGender == value;
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _selectedGender = value;
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppColors.primary.withOpacity(0.1)
+              : (isDark ? AppColors.surfaceDark : Colors.white),
+          border: Border.all(
+            color: isSelected ? AppColors.primary : Colors.grey.shade300,
+            width: isSelected ? 2 : 1,
+          ),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Column(
+          children: [
+            Icon(
+              icon,
+              color: isSelected ? AppColors.primary : Colors.grey.shade600,
+              size: 24,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                color: isSelected ? AppColors.primary : Colors.grey.shade700,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
