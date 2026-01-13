@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DotCat PetCare - Destek ve Yardım</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #FF6B9D 0%, #C06C84 100%);
+            color: white;
+            padding: 40px 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 40px 30px;
+        }
+
+        .section {
+            margin-bottom: 40px;
+        }
+
+        .section h2 {
+            color: #FF6B9D;
+            font-size: 1.8em;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 3px solid #FF6B9D;
+        }
+
+        .contact-box {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            padding: 25px;
+            border-radius: 15px;
+            margin: 20px 0;
+        }
+
+        .contact-item {
+            display: flex;
+            align-items: center;
+            margin: 15px 0;
+            font-size: 1.1em;
+        }
+
+        .contact-item strong {
+            color: #667eea;
+            margin-right: 10px;
+            min-width: 120px;
+        }
+
+        .faq-item {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 15px 0;
+            border-left: 4px solid #FF6B9D;
+        }
+
+        .faq-item h3 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 1.2em;
+        }
+
+        .faq-item p {
+            color: #666;
+            line-height: 1.8;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .feature-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 15px;
+            text-align: center;
+            transition: transform 0.3s;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .feature-card h3 {
+            margin-bottom: 10px;
+            font-size: 1.3em;
+        }
+
+        .footer {
+            background: #2d3748;
+            color: white;
+            text-align: center;
+            padding: 30px;
+        }
+
+        .footer p {
+            margin: 5px 0;
+        }
+
+        a {
+            color: #667eea;
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2em;
+            }
+
+            .content {
+                padding: 30px 20px;
+            }
+
+            .section h2 {
+                font-size: 1.5em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🐱 DotCat PetCare</h1>
+            <p>Kedinizin Sağlık Asistanı - Destek ve Yardım</p>
+        </div>
+
+        <div class="content">
+            <!-- İletişim Bilgileri -->
+            <div class="section">
+                <h2>📧 İletişim</h2>
+                <div class="contact-box">
+                    <div class="contact-item">
+                        <strong>E-posta:</strong>
+                        <a href="mailto:support@dotcatapp.com">support@dotcatapp.com</a>
+                    </div>
+                    <div class="contact-item">
+                        <strong>Yanıt Süresi:</strong>
+                        <span>24-48 saat içinde</span>
+                    </div>
+                    <div class="contact-item">
+                        <strong>Destek Saatleri:</strong>
+                        <span>Hafta içi 09:00 - 18:00</span>
+                    </div>
+                </div>
+                <p style="color: #666; margin-top: 15px;">
+                    Sorularınız, önerileriniz veya sorunlarınız için yukarıdaki e-posta adresinden bize ulaşabilirsiniz.
+                </p>
+            </div>
+
+            <!-- Sık Sorulan Sorular -->
+            <div class="section">
+                <h2>❓ Sık Sorulan Sorular</h2>
+
+                <div class="faq-item">
+                    <h3>Hesabımı nasıl silebilirim?</h3>
+                    <p>Uygulama içinde <strong>Ayarlar > Hesap > Hesabı Sil</strong> seçeneğini kullanarak hesabınızı ve tüm verilerinizi kalıcı olarak silebilirsiniz. Bu işlem geri alınamaz.</p>
+                </div>
+
+                <div class="faq-item">
+                    <h3>Verilerim güvende mi?</h3>
+                    <p>Evet! Tüm verileriniz Firebase güvenlik kuralları ile korunmaktadır. Verileriniz şifrelenerek saklanır ve sadece size özeldir. Hiçbir veri üçüncü şahıslarla paylaşılmaz.</p>
+                </div>
+
+                <div class="faq-item">
+                    <h3>Uygulama ücretsiz mi?</h3>
+                    <p>Evet, DotCat PetCare tamamen ücretsizdir. Tüm özellikler herkes için açıktır.</p>
+                </div>
+
+                <div class="faq-item">
+                    <h3>Birden fazla kedi ekleyebilir miyim?</h3>
+                    <p>Evet, dilediğiniz kadar kedi profili oluşturabilir ve her biri için ayrı hatırlatıcılar, kilo takibi ve sağlık kayıtları tutabilirsiniz.</p>
+                </div>
+
+                <div class="faq-item">
+                    <h3>Verilerim farklı cihazlarda senkronize oluyor mu?</h3>
+                    <p>Evet, hesabınızla giriş yaptığınız tüm cihazlarda verileriniz otomatik olarak senkronize edilir.</p>
+                </div>
+
+                <div class="faq-item">
+                    <h3>Bildirimler nasıl çalışır?</h3>
+                    <p>Hatırlatıcılarınız için belirlediğiniz saatlerde bildirim alırsınız. Bildirim ayarlarını her hatırlatıcı için özelleştirebilirsiniz.</p>
+                </div>
+            </div>
+
+            <!-- Özellikler -->
+            <div class="section">
+                <h2>✨ Özellikler</h2>
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <h3>🔔 Akıllı Hatırlatıcılar</h3>
+                        <p>Aşı, ilaç, bakım zamanlarını asla kaçırmayın</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3>📊 Kilo Takibi</h3>
+                        <p>Kedinizin kilosunu grafik ve trendlerle izleyin</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3>🤖 Yapay Zeka Önerileri</h3>
+                        <p>Kişiselleştirilmiş sağlık tavsiyeleri</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3>☁️ Bulut Senkronizasyonu</h3>
+                        <p>Verileriniz tüm cihazlarınızda</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Gizlilik -->
+            <div class="section">
+                <h2>🔒 Gizlilik ve Güvenlik</h2>
+                <div class="faq-item">
+                    <h3>Hangi verileri topluyoruz?</h3>
+                    <p>Sadece uygulama içinde girdiğiniz kedi bilgileri, hatırlatıcılar ve kilo kayıtlarını saklıyoruz. Kişisel bilgileriniz (e-posta) sadece kimlik doğrulama için kullanılır.</p>
+                </div>
+
+                <div class="faq-item">
+                    <h3>Verilerim nasıl kullanılıyor?</h3>
+                    <p>Verileriniz <strong>sadece</strong> size özel öneriler sunmak ve hatırlatıcılarınızı göndermek için kullanılır. Hiçbir veri reklam veya pazarlama amacıyla kullanılmaz veya satılmaz.</p>
+                </div>
+
+                <div class="faq-item">
+                    <h3>Hesabımı silersem ne olur?</h3>
+                    <p>Hesabınızı sildiğinizde, tüm verileriniz (kediler, hatırlatıcılar, kilo kayıtları) kalıcı olarak Firebase sunucularından silinir. Bu işlem geri alınamaz.</p>
+                </div>
+            </div>
+
+            <!-- Teknik Destek -->
+            <div class="section">
+                <h2>🛠️ Teknik Destek</h2>
+                <p>Uygulama ile ilgili teknik bir sorun yaşıyorsanız:</p>
+                <div class="faq-item">
+                    <p>1. Uygulamayı kapatıp tekrar açmayı deneyin</p>
+                    <p>2. Cihazınızın internet bağlantısını kontrol edin</p>
+                    <p>3. Uygulamanın en son sürümünü kullandığınızdan emin olun</p>
+                    <p>4. Sorun devam ederse <a href="mailto:support@dotcatapp.com">support@dotcatapp.com</a> adresine yazın</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p><strong>DotCat PetCare</strong></p>
+            <p>Kedinizin Sağlığı İçin Geliştirildi 🐾</p>
+            <p style="margin-top: 15px; font-size: 0.9em; opacity: 0.8;">
+                © 2024-2026 DotCat PetCare. Tüm hakları saklıdır.
+            </p>
+        </div>
+    </div>
+</body>
+</html>
