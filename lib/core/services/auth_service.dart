@@ -47,6 +47,19 @@ class AuthService {
         idToken: googleAuth.idToken,
       );
 
+      // If user is anonymous, link the account instead of signing in
+      final currentUser = _auth.currentUser;
+      if (currentUser != null && currentUser.isAnonymous) {
+        debugPrint('Google Sign In: Linking anonymous account...');
+        try {
+          return await currentUser.linkWithCredential(credential);
+        } catch (e) {
+          debugPrint('Google Sign In: Link failed, trying regular sign in: $e');
+          // If link fails (e.g., account already exists), sign in normally
+          return await _auth.signInWithCredential(credential);
+        }
+      }
+
       return await _auth.signInWithCredential(credential);
     } catch (e) {
       debugPrint('Google Sign In Error: $e');
@@ -88,9 +101,23 @@ class AuthService {
       );
 
       debugPrint('Apple Sign In: Signing in to Firebase...');
-      
-      // Sign in to Firebase
-      final userCredential = await _auth.signInWithCredential(oauthCredential);
+
+      // If user is anonymous, link the account instead of signing in
+      final currentUser = _auth.currentUser;
+      UserCredential userCredential;
+
+      if (currentUser != null && currentUser.isAnonymous) {
+        debugPrint('Apple Sign In: Linking anonymous account...');
+        try {
+          userCredential = await currentUser.linkWithCredential(oauthCredential);
+        } catch (e) {
+          debugPrint('Apple Sign In: Link failed, trying regular sign in: $e');
+          // If link fails (e.g., account already exists), sign in normally
+          userCredential = await _auth.signInWithCredential(oauthCredential);
+        }
+      } else {
+        userCredential = await _auth.signInWithCredential(oauthCredential);
+      }
 
       debugPrint('Apple Sign In: Firebase sign in successful!');
 
@@ -146,6 +173,8 @@ class AuthService {
   // Email/Password Sign In
   Future<UserCredential?> signInWithEmailPassword(String email, String password) async {
     try {
+      // Email/password doesn't support linking anonymous accounts directly
+      // Just sign in normally
       return await _auth.signInWithEmailAndPassword(email: email, password: password);
     } catch (e) {
       debugPrint('Email/Password Sign In Error: $e');
@@ -156,6 +185,22 @@ class AuthService {
   // Email/Password Sign Up
   Future<UserCredential?> signUpWithEmailPassword(String email, String password) async {
     try {
+      final currentUser = _auth.currentUser;
+
+      // If user is anonymous, link with email/password
+      if (currentUser != null && currentUser.isAnonymous) {
+        debugPrint('Email/Password Sign Up: Linking anonymous account...');
+        try {
+          final credential = EmailAuthProvider.credential(email: email, password: password);
+          return await currentUser.linkWithCredential(credential);
+        } catch (e) {
+          debugPrint('Email/Password Sign Up: Link failed, trying regular sign up: $e');
+          // If link fails, sign out and create new account
+          await _auth.signOut();
+          return await _auth.createUserWithEmailAndPassword(email: email, password: password);
+        }
+      }
+
       return await _auth.createUserWithEmailAndPassword(email: email, password: password);
     } catch (e) {
       debugPrint('Email/Password Sign Up Error: $e');

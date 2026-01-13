@@ -160,6 +160,18 @@ class InsightsNotificationService {
     }
   }
 
+  /// Check if an insight is dismissed
+  Future<bool> isInsightDismissed(String insightId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final dismissed = prefs.getStringList(_prefKeyDismissedInsights) ?? [];
+      return dismissed.contains(insightId);
+    } catch (e) {
+      debugPrint('InsightsNotificationService: Error checking dismissed: $e');
+      return false;
+    }
+  }
+
   /// Check if an insight is snoozed
   Future<bool> isInsightSnoozed(String insightId) async {
     try {

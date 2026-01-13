@@ -587,11 +587,11 @@ class AppLocalizations {
       AppLanguage.ar: 'تذكير',
     },
     'enable_reminder': {
-      AppLanguage.en: 'Enable Reminder',
-      AppLanguage.tr: 'Hatırlatıcı Aç',
-      AppLanguage.de: 'Erinnerung aktivieren',
-      AppLanguage.es: 'Activar Recordatorio',
-      AppLanguage.ar: 'تفعيل التذكير',
+      AppLanguage.en: 'Send Notification',
+      AppLanguage.tr: 'Bildirim Gönder',
+      AppLanguage.de: 'Benachrichtigung senden',
+      AppLanguage.es: 'Enviar Notificación',
+      AppLanguage.ar: 'إرسال إشعار',
     },
     'reminder_enabled': {
       AppLanguage.en: 'Reminder is on',

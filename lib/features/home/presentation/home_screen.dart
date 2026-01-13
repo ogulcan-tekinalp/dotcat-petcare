@@ -600,30 +600,36 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     top: 4,
                     child: Consumer(
                       builder: (context, ref, _) {
-                        final count = ref.watch(highPriorityInsightsCountProvider);
-                        if (count == 0) return const SizedBox.shrink();
-                        return Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [AppColors.error, AppColors.error.withOpacity(0.8)],
-                            ),
-                            shape: BoxShape.circle,
-                            boxShadow: AppShadows.colored(AppColors.error),
-                          ),
-                          constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
-                          child: Text(
-                            count.toString(),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ).animate(onPlay: (controller) => controller.repeat())
+                        final countAsync = ref.watch(highPriorityInsightsCountProvider);
+                        return countAsync.when(
+                          data: (count) {
+                            if (count == 0) return const SizedBox.shrink();
+                            return Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [AppColors.error, AppColors.error.withOpacity(0.8)],
+                                ),
+                                shape: BoxShape.circle,
+                                boxShadow: AppShadows.colored(AppColors.error),
+                              ),
+                              constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                              child: Text(
+                                count.toString(),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ).animate(onPlay: (controller) => controller.repeat())
                             .shake(duration: 500.ms)
                             .then(delay: 3000.ms);
+                          },
+                          loading: () => const SizedBox.shrink(),
+                          error: (_, __) => const SizedBox.shrink(),
+                        );
                       },
                     ),
                   ),

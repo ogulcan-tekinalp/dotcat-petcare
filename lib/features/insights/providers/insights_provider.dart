@@ -115,14 +115,32 @@ final insightsProvider = FutureProvider<List<Insight>>((ref) async {
   return activeInsights.where((i) => shownToday.contains(i.id)).toList();
 });
 
-/// High priority insights count (for badge)
-final highPriorityInsightsCountProvider = Provider<int>((ref) {
-  final insights = ref.watch(insightsProvider);
-  return insights.when(
-    data: (list) => list.where((i) => i.priority == InsightPriority.high).length,
-    loading: () => 0,
-    error: (_, __) => 0,
-  );
+/// High priority insights count (for badge) - counts ALL high priority insights, not just filtered ones
+final highPriorityInsightsCountProvider = FutureProvider<int>((ref) async {
+  final allInsights = await ref.watch(allInsightsProvider.future);
+  final prefs = await SharedPreferences.getInstance();
+
+  // Get dismissed insights
+  final dismissedList = prefs.getStringList('insights_dismissed') ?? [];
+
+  // Count high priority insights that are not dismissed
+  int count = 0;
+  for (final insight in allInsights) {
+    if (insight.priority == InsightPriority.high && !dismissedList.contains(insight.id)) {
+      // Also check if snoozed
+      final snoozeUntilStr = prefs.getString('insight_snoozed_${insight.id}');
+      if (snoozeUntilStr == null) {
+        count++;
+      } else {
+        final snoozeUntil = DateTime.parse(snoozeUntilStr);
+        if (DateTime.now().isAfter(snoozeUntil)) {
+          count++;
+        }
+      }
+    }
+  }
+
+  return count;
 });
 
 /// Insights actions provider
@@ -146,8 +164,16 @@ class InsightsActions {
     dismissed.add(entry);
     await prefs.setStringList('insights_dismissed_v2', dismissed);
 
-    // Refresh insights
+    // Also add to simple dismissed list for badge counting
+    final simpleDismissed = prefs.getStringList('insights_dismissed') ?? [];
+    if (!simpleDismissed.contains(insightId)) {
+      simpleDismissed.add(insightId);
+      await prefs.setStringList('insights_dismissed', simpleDismissed);
+    }
+
+    // Refresh insights and badge count
     ref.invalidate(insightsProvider);
+    ref.invalidate(highPriorityInsightsCountProvider);
   }
 
   /// Snooze an insight (hide for today)

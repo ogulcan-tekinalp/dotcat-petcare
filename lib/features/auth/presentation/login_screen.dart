@@ -62,7 +62,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
     try {
       final authService = ref.read(authServiceProvider);
       final result = await authService.signInWithGoogle();
-      
+
       if (result != null && mounted) {
         _goToHome();
       } else if (mounted) {
@@ -81,7 +81,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
     try {
       final authService = ref.read(authServiceProvider);
       final result = await authService.signInWithApple();
-      
+
       if (result != null && mounted) {
         _goToHome();
       } else if (mounted) {
@@ -120,13 +120,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
 
   Future<void> _signInWithEmailPassword() async {
     if (!_formKey.currentState!.validate()) return;
-    
+
     setState(() { _isLoading = true; _error = null; });
 
     try {
       final authService = ref.read(authServiceProvider);
       UserCredential? result;
-      
+
       if (_isSignUp) {
         result = await authService.signUpWithEmailPassword(
           _emailController.text.trim(),
@@ -138,7 +138,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
           _passwordController.text,
         );
       }
-      
+
       if (result != null && mounted) {
         _goToHome();
       }
@@ -172,9 +172,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
       if (mounted) setState(() => _isLoading = false);
     }
   }
-
-
-
   Future<void> _goToHome() async {
     // Login sonrası provider'ları yeniden yükle
     try {

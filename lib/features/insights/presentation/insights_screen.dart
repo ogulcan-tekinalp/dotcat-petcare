@@ -63,11 +63,13 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
       completedDates: completions.completedDates,
     );
 
-    // Filter out snoozed insights
+    // Filter out snoozed AND dismissed insights
     final filteredInsights = <Insight>[];
     for (final insight in insights) {
       final isSnoozed = await InsightsNotificationService.instance.isInsightSnoozed(insight.id);
-      if (!isSnoozed) {
+      final isDismissed = await InsightsNotificationService.instance.isInsightDismissed(insight.id);
+
+      if (!isSnoozed && !isDismissed) {
         filteredInsights.add(insight);
       }
     }

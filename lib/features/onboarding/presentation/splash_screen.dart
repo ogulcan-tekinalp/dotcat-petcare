@@ -54,12 +54,31 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
       debugPrint('SplashScreen: hasEverLoggedIn = $hasEverLoggedIn');
 
       // Firebase auth state check with error handling
+      User? currentUser;
       bool isLoggedIn = false;
+      bool isAnonymous = false;
+
       try {
-        isLoggedIn = FirebaseAuth.instance.currentUser != null;
-        debugPrint('SplashScreen: isLoggedIn = $isLoggedIn');
+        currentUser = FirebaseAuth.instance.currentUser;
+        isLoggedIn = currentUser != null;
+        isAnonymous = currentUser?.isAnonymous ?? false;
+        debugPrint('SplashScreen: isLoggedIn = $isLoggedIn, isAnonymous = $isAnonymous');
       } catch (e) {
         debugPrint('SplashScreen: Firebase auth check failed: $e');
+      }
+
+      // Auto sign-in anonymously if no user exists
+      if (currentUser == null) {
+        try {
+          debugPrint('SplashScreen: No user found, signing in anonymously...');
+          final result = await FirebaseAuth.instance.signInAnonymously();
+          currentUser = result.user;
+          isLoggedIn = true;
+          isAnonymous = true;
+          debugPrint('SplashScreen: Anonymous sign-in successful, UID: ${currentUser?.uid}');
+        } catch (e) {
+          debugPrint('SplashScreen: Anonymous sign-in failed: $e');
+        }
       }
 
       if (!mounted) return;
@@ -69,11 +88,11 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
       if (!hasEverLoggedIn && !hasSeenOnboarding) {
         nextScreen = const OnboardingV2Screen();
       }
-      // Eğer login yapmışsa direkt home'a git
-      else if (isLoggedIn) {
+      // Eğer authenticated user ise (anonim değil) direkt home'a git
+      else if (isLoggedIn && !isAnonymous) {
         nextScreen = const HomeScreen();
       }
-      // Diğer durumlarda login ekranına git
+      // Anonim kullanıcı veya login olmamış - login ekranına git
       else {
         nextScreen = const LoginScreen();
       }
