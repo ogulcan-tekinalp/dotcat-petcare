@@ -54,6 +54,9 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
   }
 
   void _nextPage() {
+    // Dismiss keyboard before navigation
+    FocusScope.of(context).unfocus();
+
     HapticService.instance.tap();
     if (_currentPage < _totalPages - 1) {
       // Sayfa 1'de (kedi oluşturma) form validasyonu
@@ -221,9 +224,11 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    return Scaffold(
-      resizeToAvoidBottomInset: true, // Klavye açıldığında ekranı yukarı kaydır
-      body: Container(
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(), // Dismiss keyboard on tap outside
+      child: Scaffold(
+        resizeToAvoidBottomInset: true, // Klavye açıldığında ekranı yukarı kaydır
+        body: Container(
         decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
@@ -262,7 +267,8 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
             ],
           ),
         ),
-      ),
+      ), // Close Scaffold
+      ), // Close GestureDetector
     );
   }
 
@@ -497,6 +503,7 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
 
   Widget _buildCatCreationPage(bool isDark) {
     return SingleChildScrollView(
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Form(
         key: _formKey,
@@ -551,6 +558,7 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
             const SizedBox(height: 8),
             TextFormField(
               controller: _nameController,
+              textInputAction: TextInputAction.next,
               decoration: InputDecoration(
                 hintText: 'Kedinizin adı',
                 filled: true,
@@ -647,6 +655,7 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
 
   Widget _buildNotificationPage() {
     return SingleChildScrollView(
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -697,6 +706,8 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
                 TextFormField(
                   controller: _weightController,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  textInputAction: TextInputAction.done,
+                  onFieldSubmitted: (_) => FocusScope.of(context).unfocus(),
                   style: const TextStyle(fontSize: 18),
                   decoration: InputDecoration(
                     hintText: 'Örn: 4.5',
