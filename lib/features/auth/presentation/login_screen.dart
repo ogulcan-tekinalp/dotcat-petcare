@@ -11,6 +11,7 @@ import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_text_field.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../../../core/services/auth_service.dart';
+import '../../../core/services/migration_service.dart';
 import '../../home/presentation/home_screen.dart';
 import '../../cats/providers/cats_provider.dart';
 import '../../reminders/providers/reminders_provider.dart';
@@ -173,6 +174,55 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
     }
   }
   Future<void> _goToHome() async {
+    // Check if we need to migrate data from anonymous account
+    final authService = ref.read(authServiceProvider);
+    final previousAnonymousUserId = authService.previousAnonymousUserId;
+    final currentUserId = authService.currentUser?.uid;
+
+    if (previousAnonymousUserId != null && currentUserId != null && previousAnonymousUserId != currentUserId) {
+      debugPrint('LoginScreen: Migration needed from $previousAnonymousUserId to $currentUserId');
+
+      // Show loading dialog during migration
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const Center(
+            child: Card(
+              child: Padding(
+                padding: EdgeInsets.all(24.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 16),
+                    Text('Verileriniz aktarılıyor...'),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+
+      try {
+        // Migrate user data
+        await MigrationService.instance.migrateUserData(previousAnonymousUserId, currentUserId);
+        debugPrint('LoginScreen: Migration completed successfully');
+
+        // Clear the previous UID
+        authService.clearPreviousAnonymousUserId();
+
+        // Close loading dialog
+        if (mounted) Navigator.of(context).pop();
+      } catch (e) {
+        debugPrint('LoginScreen: Migration failed: $e');
+        // Close loading dialog
+        if (mounted) Navigator.of(context).pop();
+        // Continue anyway - user can re-add their cat if needed
+      }
+    }
+
     // Login sonrası provider'ları yeniden yükle
     try {
       debugPrint('LoginScreen: Refreshing providers after login...');

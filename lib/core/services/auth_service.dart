@@ -36,6 +36,15 @@ class AuthService {
     return localId;
   }
 
+  // Store previous anonymous UID for migration
+  String? _previousAnonymousUserId;
+
+  String? get previousAnonymousUserId => _previousAnonymousUserId;
+
+  void clearPreviousAnonymousUserId() {
+    _previousAnonymousUserId = null;
+  }
+
   Future<UserCredential?> signInWithGoogle() async {
     try {
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
@@ -51,10 +60,17 @@ class AuthService {
       final currentUser = _auth.currentUser;
       if (currentUser != null && currentUser.isAnonymous) {
         debugPrint('Google Sign In: Linking anonymous account...');
+        // Store previous UID for migration
+        _previousAnonymousUserId = currentUser.uid;
+        debugPrint('Google Sign In: Stored previous anonymous UID: $_previousAnonymousUserId');
+
         try {
-          return await currentUser.linkWithCredential(credential);
+          final result = await currentUser.linkWithCredential(credential);
+          debugPrint('Google Sign In: Link successful, new UID: ${result.user?.uid}');
+          return result;
         } catch (e) {
           debugPrint('Google Sign In: Link failed, trying regular sign in: $e');
+          _previousAnonymousUserId = null; // Clear since link failed
           // If link fails (e.g., account already exists), sign in normally
           return await _auth.signInWithCredential(credential);
         }
@@ -108,10 +124,16 @@ class AuthService {
 
       if (currentUser != null && currentUser.isAnonymous) {
         debugPrint('Apple Sign In: Linking anonymous account...');
+        // Store previous UID for migration
+        _previousAnonymousUserId = currentUser.uid;
+        debugPrint('Apple Sign In: Stored previous anonymous UID: $_previousAnonymousUserId');
+
         try {
           userCredential = await currentUser.linkWithCredential(oauthCredential);
+          debugPrint('Apple Sign In: Link successful, new UID: ${userCredential.user?.uid}');
         } catch (e) {
           debugPrint('Apple Sign In: Link failed, trying regular sign in: $e');
+          _previousAnonymousUserId = null; // Clear since link failed
           // If link fails (e.g., account already exists), sign in normally
           userCredential = await _auth.signInWithCredential(oauthCredential);
         }
@@ -190,11 +212,18 @@ class AuthService {
       // If user is anonymous, link with email/password
       if (currentUser != null && currentUser.isAnonymous) {
         debugPrint('Email/Password Sign Up: Linking anonymous account...');
+        // Store previous UID for migration
+        _previousAnonymousUserId = currentUser.uid;
+        debugPrint('Email/Password Sign Up: Stored previous anonymous UID: $_previousAnonymousUserId');
+
         try {
           final credential = EmailAuthProvider.credential(email: email, password: password);
-          return await currentUser.linkWithCredential(credential);
+          final result = await currentUser.linkWithCredential(credential);
+          debugPrint('Email/Password Sign Up: Link successful, new UID: ${result.user?.uid}');
+          return result;
         } catch (e) {
           debugPrint('Email/Password Sign Up: Link failed, trying regular sign up: $e');
+          _previousAnonymousUserId = null; // Clear since link failed
           // If link fails, sign out and create new account
           await _auth.signOut();
           return await _auth.createUserWithEmailAndPassword(email: email, password: password);
