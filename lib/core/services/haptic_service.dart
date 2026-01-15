@@ -78,3 +78,4 @@ class HapticService {
   Future<void> swipe() => feedback(HapticType.medium);
 }
 
+

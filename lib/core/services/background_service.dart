@@ -227,3 +227,4 @@ class AppLifecycleService {
   bool get isInForeground => _isInForeground;
 }
 
+
