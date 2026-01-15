@@ -135,7 +135,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
             ),
             const SizedBox(height: 24),
             Text(
-              'Her şey yolunda! 🎉',
+              AppLocalizations.get('insights_empty_title'),
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
@@ -144,7 +144,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Şu an için öneri bulunmuyor.\nKedilerinizin bakımı güncel görünüyor.',
+              AppLocalizations.get('insights_empty_message'),
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: AppColors.textSecondary,
@@ -393,8 +393,8 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
               const SizedBox(height: 24),
               ListTile(
                 leading: const Icon(Icons.access_time, color: AppColors.info),
-                title: const Text('3 gün sonra hatırlat'),
-                subtitle: const Text('Bu öneriyi 3 gün sonra tekrar göster'),
+                title: Text(AppLocalizations.get('snooze_3days')),
+                subtitle: Text(AppLocalizations.get('snooze_3days_subtitle')),
                 onTap: () {
                   Navigator.pop(context);
                   _snoozeInsight(insight, days: 3);
@@ -402,8 +402,8 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
               ),
               ListTile(
                 leading: const Icon(Icons.access_time, color: AppColors.warning),
-                title: const Text('7 gün sonra hatırlat'),
-                subtitle: const Text('Bu öneriyi 1 hafta sonra tekrar göster'),
+                title: Text(AppLocalizations.get('snooze_7days')),
+                subtitle: Text(AppLocalizations.get('snooze_7days_subtitle')),
                 onTap: () {
                   Navigator.pop(context);
                   _snoozeInsight(insight, days: 7);
@@ -411,8 +411,8 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
               ),
               ListTile(
                 leading: const Icon(Icons.close, color: AppColors.error),
-                title: const Text('Gösterme'),
-                subtitle: const Text('Bu öneriyi bir daha gösterme'),
+                title: Text(AppLocalizations.get('dismiss_insight')),
+                subtitle: Text(AppLocalizations.get('dismiss_insight_subtitle')),
                 onTap: () {
                   Navigator.pop(context);
                   _dismissInsight(insight);
@@ -433,7 +433,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
 
     AppToast.show(
       context,
-      message: '$days gün sonra tekrar hatırlatılacak',
+      message: AppLocalizations.get('snoozed_for_days').replaceAll('{days}', days.toString()),
       type: ToastType.info,
     );
 
@@ -450,7 +450,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
 
     AppToast.show(
       context,
-      message: 'Öneri kaldırıldı',
+      message: AppLocalizations.get('insight_dismissed'),
       type: ToastType.success,
     );
 
