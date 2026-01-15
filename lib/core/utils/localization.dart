@@ -3587,6 +3587,36 @@ class AppLocalizations {
       AppLanguage.es: 'Recomendación eliminada',
       AppLanguage.ar: 'تمت إزالة التوصية',
     },
+
+    // ============ NOTIFICATIONS - INSIGHTS ============
+    'notification_channel_health_insights': {
+      AppLanguage.en: 'Health Insights',
+      AppLanguage.tr: 'Sağlık Önerileri',
+      AppLanguage.de: 'Gesundheitsempfehlungen',
+      AppLanguage.es: 'Recomendaciones de Salud',
+      AppLanguage.ar: 'نصائح صحية',
+    },
+    'notification_channel_health_insights_desc': {
+      AppLanguage.en: 'Smart health recommendations for your cats',
+      AppLanguage.tr: 'Kedileriniz için akıllı sağlık önerileri',
+      AppLanguage.de: 'Intelligente Gesundheitsempfehlungen für Ihre Katzen',
+      AppLanguage.es: 'Recomendaciones inteligentes de salud para sus gatos',
+      AppLanguage.ar: 'توصيات صحية ذكية لقططك',
+    },
+    'notification_insight_reminder_title': {
+      AppLanguage.en: '💡 Reminder: {title}',
+      AppLanguage.tr: '💡 Hatırlatma: {title}',
+      AppLanguage.de: '💡 Erinnerung: {title}',
+      AppLanguage.es: '💡 Recordatorio: {title}',
+      AppLanguage.ar: '💡 تذكير: {title}',
+    },
+    'notification_insight_reminder_body': {
+      AppLanguage.en: '{description}\n\nYou snoozed this recommendation 1 month ago. You still haven\'t created the related reminder.',
+      AppLanguage.tr: '{description}\n\nBu öneriyi 1 ay önce ertelemiştiniz. Hala ilgili hatırlatıcıyı oluşturmadınız.',
+      AppLanguage.de: '{description}\n\nSie haben diese Empfehlung vor 1 Monat verschoben. Sie haben die zugehörige Erinnerung noch nicht erstellt.',
+      AppLanguage.es: '{description}\n\nPospuso esta recomendación hace 1 mes. Aún no ha creado el recordatorio relacionado.',
+      AppLanguage.ar: '{description}\n\nقمت بتأجيل هذه التوصية منذ شهر واحد. لم تقم بعد بإنشاء التذكير ذي الصلة.',
+    },
   };
 
   static String get(String key) {

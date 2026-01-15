@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/timezone.dart' as tz;
 import '../utils/notification_service.dart';
+import '../utils/localization.dart';
 import 'insights_service.dart';
 import '../../data/models/cat.dart';
 import '../../data/models/reminder.dart';
@@ -16,8 +17,8 @@ class InsightsNotificationService {
 
   // Notification channel for insights
   static const String _insightChannelId = 'insights_channel';
-  static const String _insightChannelName = 'Sağlık Önerileri';
-  static const String _insightChannelDescription = 'Kedileriniz için akıllı sağlık önerileri';
+  static String get _insightChannelName => AppLocalizations.get('notification_channel_health_insights');
+  static String get _insightChannelDescription => AppLocalizations.get('notification_channel_health_insights_desc');
 
   // Base notification ID for insights (to avoid conflicts with reminders)
   static const int _baseNotificationId = 10000;
@@ -223,8 +224,8 @@ class InsightsNotificationService {
     try {
       await NotificationService.instance.showInstantNotification(
         id: _baseNotificationId + insight.hashCode,
-        title: '💡 Hatırlatma: ${insight.title}',
-        body: '${insight.description}\n\nBu öneriyi 1 ay önce ertelemiştiniz. Hala ilgili hatırlatıcıyı oluşturmadınız.',
+        title: AppLocalizations.get('notification_insight_reminder_title').replaceAll('{title}', insight.title),
+        body: AppLocalizations.get('notification_insight_reminder_body').replaceAll('{description}', insight.description),
       );
 
       debugPrint('InsightsNotificationService: Sent reactivated insight notification for ${insight.id}');
