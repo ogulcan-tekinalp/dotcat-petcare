@@ -235,12 +235,17 @@ class InsightsNotificationService {
   }
 
   /// Schedule weekly seasonal insights
+  /// NOTE: This schedules a ONE-TIME notification for next Sunday
+  /// The app should reschedule this after it fires (via background service or app open)
   Future<void> scheduleWeeklySeasonalInsight(List<Cat> cats) async {
     try {
       // Get seasonal insights
-      final seasonalInsights = InsightsService.instance.generateSeasonalInsights(cats);
+      final seasonalInsights = InsightsService.instance.generateSeasonalInsights(cats, null);
 
-      if (seasonalInsights.isEmpty) return;
+      if (seasonalInsights.isEmpty) {
+        debugPrint('InsightsNotificationService: No seasonal insights available');
+        return;
+      }
 
       // Schedule for Sunday at 10 AM
       final now = tz.TZDateTime.now(tz.local);
@@ -258,13 +263,19 @@ class InsightsNotificationService {
       if (daysUntilSunday == 0 && now.hour >= 10) {
         // If it's Sunday and past 10 AM, schedule for next Sunday
         scheduledDate = scheduledDate.add(const Duration(days: 7));
-      } else {
+      } else if (daysUntilSunday > 0) {
         scheduledDate = scheduledDate.add(Duration(days: daysUntilSunday));
       }
 
-      // Pick a seasonal insight
-      final insight = seasonalInsights.first;
+      // Pick a seasonal insight (rotate through them)
+      final weekOfYear = _getWeekOfYear(now);
+      final insightIndex = weekOfYear % seasonalInsights.length;
+      final insight = seasonalInsights[insightIndex];
 
+      // Cancel previous seasonal notification
+      await NotificationService.instance.cancelReminder(_baseNotificationId + 999);
+
+      // Schedule new one
       await NotificationService.instance.scheduleOneTimeReminder(
         id: _baseNotificationId + 999, // Special ID for seasonal
         title: '🌿 ${insight.title}',
@@ -273,9 +284,16 @@ class InsightsNotificationService {
         payload: 'seasonal_insight:${insight.id}',
       );
 
-      debugPrint('InsightsNotificationService: Scheduled weekly seasonal insight for $scheduledDate');
+      debugPrint('InsightsNotificationService: Scheduled weekly seasonal insight "${insight.title}" for $scheduledDate');
     } catch (e) {
       debugPrint('InsightsNotificationService: Error scheduling seasonal insight: $e');
     }
+  }
+
+  /// Get week number of the year
+  int _getWeekOfYear(DateTime date) {
+    final startOfYear = DateTime(date.year, 1, 1);
+    final daysSinceStart = date.difference(startOfYear).inDays;
+    return (daysSinceStart / 7).floor() + 1;
   }
 }

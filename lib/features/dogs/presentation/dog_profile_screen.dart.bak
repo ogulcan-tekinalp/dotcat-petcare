@@ -20,10 +20,8 @@ import '../../weight/providers/weight_provider.dart';
 import '../../reminders/presentation/add_reminder_screen.dart';
 import '../../reminders/presentation/record_detail_screen.dart';
 import '../../weight/presentation/weight_screen.dart';
-import '../providers/cats_provider.dart';
-import '../../dogs/providers/dogs_provider.dart';
-import 'edit_cat_screen.dart';
-import '../../dogs/presentation/edit_dog_screen.dart';
+import '../providers/dogs_provider.dart';
+import 'edit_dog_screen.dart';
 
 bool _photoExists(String? path) {
   if (path == null || path.isEmpty) return false;
@@ -31,38 +29,36 @@ bool _photoExists(String? path) {
   return File(path).existsSync();
 }
 
-/// Pet Profili - Kullanışlı bakım takip ekranı (kedi ve köpek için)
-class CatProfileScreen extends ConsumerStatefulWidget {
-  final dynamic cat; // Can be Cat or Dog
-  const CatProfileScreen({super.key, required this.cat});
+/// Köpek Profili - Kullanışlı bakım takip ekranı (köpeğe özel)
+class DogProfileScreen extends ConsumerStatefulWidget {
+  final Dog dog;
+  const DogProfileScreen({super.key, required this.dog});
 
   @override
-  ConsumerState<CatProfileScreen> createState() => _CatProfileScreenState();
+  ConsumerState<DogProfileScreen> createState() => _DogProfileScreenState();
 }
 
-class _CatProfileScreenState extends ConsumerState<CatProfileScreen> {
-  late dynamic _currentPet; // Can be Cat or Dog
+class _DogProfileScreenState extends ConsumerState<DogProfileScreen> {
+  late Dog _currentDog;
 
-  // Helper getters for pet properties
-  String get _petId => _currentPet.id;
-  String get _petName => _currentPet.name;
-  DateTime get _petBirthDate => _currentPet.birthDate;
-  String? get _petBreed => _currentPet.breed;
-  String? get _petPhotoPath => _currentPet.photoPath;
-  bool get _isPetCat => _currentPet is Cat;
-  bool get _isPetDog => _currentPet is Dog;
-  PetType get _petType => _isPetCat ? PetType.cat : PetType.dog;
+  // Helper getters for dog properties
+  String get _dogId => _currentDog.id;
+  String get _dogName => _currentDog.name;
+  DateTime get _dogBirthDate => _currentDog.birthDate;
+  String? get _dogBreed => _currentDog.breed;
+  String? get _dogSize => _currentDog.size;
+  String? get _dogPhotoPath => _currentDog.photoPath;
 
   @override
   void initState() {
     super.initState();
-    _currentPet = widget.cat;
+    _currentDog = widget.dog;
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadData());
   }
 
   Future<void> _loadData() async {
     await ref.read(remindersProvider.notifier).loadReminders();
-    await ref.read(weightProvider.notifier).loadWeightRecords(_petId);
+    await ref.read(weightProvider.notifier).loadWeightRecords(_dogId);
   }
 
   @override
@@ -72,14 +68,18 @@ class _CatProfileScreenState extends ConsumerState<CatProfileScreen> {
     final completions = ref.watch(completionsProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    final catReminders = allReminders.where((r) => r.catId == _petId).toList();
-    
-    // Kategori bazlı görevler
-    final vaccines = catReminders.where((r) => r.type == 'vaccine').toList();
-    final medicines = catReminders.where((r) => r.type == 'medicine').toList();
-    final vetVisits = catReminders.where((r) => r.type == 'vet').toList();
-    final grooming = catReminders.where((r) => r.type == 'grooming').toList();
-    final food = catReminders.where((r) => r.type == 'food').toList();
+    final dogReminders = allReminders.where((r) => r.petId == _dogId).toList();
+
+    // Kategori bazlı görevler (köpeğe özel)
+    final vaccines = dogReminders.where((r) => r.type == 'vaccine').toList();
+    final medicines = dogReminders.where((r) => r.type == 'medicine').toList();
+    final vetVisits = dogReminders.where((r) => r.type == 'vet').toList();
+    final grooming = dogReminders.where((r) => r.type == 'grooming').toList();
+    final food = dogReminders.where((r) => r.type == 'food').toList();
+    final walks = dogReminders.where((r) => r.type == 'walk').toList();
+    final training = dogReminders.where((r) => r.type == 'training').toList();
+    final playtime = dogReminders.where((r) => r.type == 'playtime').toList();
+    final bath = dogReminders.where((r) => r.type == 'bath').toList();
     
     // Yaklaşan görevler (7 gün içinde)
     final now = DateTime.now();

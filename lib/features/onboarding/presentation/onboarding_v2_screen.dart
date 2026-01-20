@@ -11,8 +11,10 @@ import '../../../core/services/auth_service.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/localization.dart';
 import '../../cats/providers/cats_provider.dart';
+import '../../dogs/providers/dogs_provider.dart';
 import '../../weight/providers/weight_provider.dart';
 import '../../auth/presentation/login_screen.dart';
+import '../../../data/models/pet_type.dart';
 
 /// Yeni Onboarding 2.0 - Basitleştirilmiş ve Kedi Oluşturma İçeriyor
 class OnboardingV2Screen extends ConsumerStatefulWidget {
@@ -25,14 +27,19 @@ class OnboardingV2Screen extends ConsumerStatefulWidget {
 class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
-  final int _totalPages = 4;
+  final int _totalPages = 5; // 4'ten 5'e çıktı (pet type selection eklendi)
 
-  // Cat creation form
+  // Pet type selection
+  PetType? _selectedPetType;
+
+  // Pet creation form
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _weightController = TextEditingController();
   DateTime _birthDate = DateTime.now().subtract(const Duration(days: 180)); // 6 ay
   String? _selectedGender;
+  String? _selectedBreed; // Köpek için
+  String? _selectedSize; // Köpek için
   File? _photoFile;
   final _picker = ImagePicker();
 
@@ -59,8 +66,17 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
 
     HapticService.instance.tap();
     if (_currentPage < _totalPages - 1) {
-      // Sayfa 1'de (kedi oluşturma) form validasyonu
+      // Sayfa 1'de (pet type selection) validasyonu
       if (_currentPage == 1) {
+        if (_selectedPetType == null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Lütfen bir evcil hayvan türü seçin')),
+          );
+          return;
+        }
+      }
+      // Sayfa 2'de (pet creation) form validasyonu
+      if (_currentPage == 2) {
         if (!_formKey.currentState!.validate()) {
           return;
         }
@@ -78,7 +94,6 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
   Future<void> _completeOnboarding() async {
     final prefs = await SharedPreferences.getInstance();
 
-    // Kedi oluştur
     try {
       // Önce anonymous login yap (eğer giriş yapılmamışsa)
       final authService = ref.read(authServiceProvider);
@@ -96,45 +111,79 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
         }
       }
 
-      final cat = await ref.read(catsProvider.notifier).addCat(
-        name: _nameController.text.trim(),
-        birthDate: _birthDate,
-        gender: _selectedGender,
-        weight: weight,
-        photoPath: _photoFile?.path,
-      );
-
-      // Preferences kaydet
-      await prefs.setBool('hasSeenOnboarding', true);
-
-      // İlk kedi olarak işaretle
-      await prefs.setString('first_cat_id', cat.id);
-
-      // Kiloyu preference'a kaydet (insights için)
-      if (weight != null) {
-        await prefs.setDouble('onboarding_initial_weight', weight);
-
-        // Kilo kaydı oluştur
-        await ref.read(weightProvider.notifier).addWeightRecord(
-          catId: cat.id,
+      if (_selectedPetType == PetType.cat) {
+        // Kedi oluştur
+        final cat = await ref.read(catsProvider.notifier).addCat(
+          name: _nameController.text.trim(),
+          birthDate: _birthDate,
+          gender: _selectedGender,
           weight: weight,
-          notes: 'İlk kayıt (Onboarding)',
+          photoPath: _photoFile?.path,
         );
-      }
 
-      // Kedi yaşına göre tip kaydet
-      final ageInMonths = cat.ageInMonths;
-      String catType = 'adult';
-      if (ageInMonths < 12) {
-        catType = 'kitten';
-      } else if (ageInMonths >= 84) {
-        catType = 'senior';
+        // Preferences kaydet
+        await prefs.setBool('hasSeenOnboarding', true);
+        await prefs.setString('first_cat_id', cat.id);
+
+        // Kiloyu preference'a kaydet (insights için)
+        if (weight != null) {
+          await prefs.setDouble('onboarding_initial_weight', weight);
+          await ref.read(weightProvider.notifier).addWeightRecord(
+            catId: cat.id,
+            weight: weight,
+            notes: 'İlk kayıt (Onboarding)',
+          );
+        }
+
+        // Kedi yaşına göre tip kaydet
+        final ageInMonths = cat.ageInMonths;
+        String catType = 'adult';
+        if (ageInMonths < 12) {
+          catType = 'kitten';
+        } else if (ageInMonths >= 84) {
+          catType = 'senior';
+        }
+        await prefs.setString('onboarding_cat_type', catType);
+      } else if (_selectedPetType == PetType.dog) {
+        // Köpek oluştur
+        final dog = await ref.read(dogsProvider.notifier).addDog(
+          name: _nameController.text.trim(),
+          birthDate: _birthDate,
+          gender: _selectedGender,
+          weight: weight,
+          breed: _selectedBreed,
+          size: _selectedSize,
+          photoPath: _photoFile?.path,
+        );
+
+        // Preferences kaydet
+        await prefs.setBool('hasSeenOnboarding', true);
+        await prefs.setString('first_dog_id', dog.id);
+
+        // Kiloyu preference'a kaydet (insights için)
+        if (weight != null) {
+          await prefs.setDouble('onboarding_initial_weight', weight);
+          await ref.read(weightProvider.notifier).addWeightRecord(
+            catId: dog.id, // Weight provider uses catId for both cats and dogs
+            weight: weight,
+            notes: 'İlk kayıt (Onboarding)',
+          );
+        }
+
+        // Köpek yaşına göre tip kaydet
+        final ageInMonths = dog.ageInMonths;
+        String dogType = 'adult';
+        if (ageInMonths < 12) {
+          dogType = 'puppy';
+        } else if (ageInMonths >= 84) {
+          dogType = 'senior';
+        }
+        await prefs.setString('onboarding_dog_type', dogType);
       }
-      await prefs.setString('onboarding_cat_type', catType);
 
       if (!mounted) return;
 
-      // Login ekranına yönlendir (kullanıcı anonim kalamaz)
+      // Login ekranına yönlendir
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -144,7 +193,7 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Kedi kaydedilemedi: $e')),
+        SnackBar(content: Text('${_selectedPetType == PetType.cat ? "Kedi" : "Köpek"} kaydedilemedi: $e')),
       );
     }
   }
@@ -255,7 +304,8 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
                   },
                   children: [
                     _buildWelcomePage(),
-                    _buildCatCreationPage(isDark),
+                    _buildPetTypeSelectionPage(),
+                    _buildPetCreationPage(isDark),
                     _buildNotificationPage(),
                     _buildReadyPage(),
                   ],
@@ -316,8 +366,14 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
   }
 
   Widget _buildNavigation() {
-    // Sayfa 1'de (kedi oluşturma) form dolu değilse butonu disable et
-    final canProceed = _currentPage != 1 || (_nameController.text.trim().isNotEmpty);
+    // Sayfa 1'de (pet type selection) pet seçilmemişse disable
+    // Sayfa 2'de (pet creation) form dolu değilse disable
+    bool canProceed = true;
+    if (_currentPage == 1 && _selectedPetType == null) {
+      canProceed = false;
+    } else if (_currentPage == 2 && _nameController.text.trim().isEmpty) {
+      canProceed = false;
+    }
 
     return Padding(
       padding: EdgeInsets.only(
@@ -367,6 +423,136 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
 
   // ============ PAGES ============
 
+  Widget _buildPetTypeSelectionPage() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.only(left: 24, right: 24, top: 20, bottom: 100),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'İlk Evcil Hayvanınızı Ekleyin',
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Hangi tür evcil hayvan eklemek istersiniz?',
+            style: TextStyle(color: Colors.grey.shade600),
+          ),
+          const SizedBox(height: 40),
+
+          // Cat option
+          _buildPetTypeCard(
+            petType: PetType.cat,
+            icon: '🐱',
+            title: 'Kedi',
+            description: 'Kedim için profil oluştur',
+            gradient: [AppColors.primary, AppColors.primaryLight],
+            isDark: isDark,
+          ),
+          const SizedBox(height: 16),
+
+          // Dog option
+          _buildPetTypeCard(
+            petType: PetType.dog,
+            icon: '🐶',
+            title: 'Köpek',
+            description: 'Köpeğim için profil oluştur',
+            gradient: [AppColors.secondary, AppColors.accent],
+            isDark: isDark,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPetTypeCard({
+    required PetType petType,
+    required String icon,
+    required String title,
+    required String description,
+    required List<Color> gradient,
+    required bool isDark,
+  }) {
+    final isSelected = _selectedPetType == petType;
+
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _selectedPetType = petType;
+          // Reset form when pet type changes
+          _selectedBreed = null;
+          _selectedSize = null;
+        });
+        HapticService.instance.tap();
+      },
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: isDark ? AppColors.surfaceDark : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? gradient.first : (isDark ? Colors.grey.shade700 : Colors.grey.shade300),
+            width: isSelected ? 3 : 1,
+          ),
+          boxShadow: isSelected
+              ? AppShadows.colored(gradient.first)
+              : AppShadows.medium,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 70,
+              height: 70,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(colors: gradient),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: isSelected ? AppShadows.colored(gradient.first) : [],
+              ),
+              child: Center(
+                child: Text(icon, style: const TextStyle(fontSize: 40)),
+              ),
+            ),
+            const SizedBox(width: 20),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: isSelected ? gradient.first : (isDark ? Colors.white : Colors.grey.shade800),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    description,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (isSelected)
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: gradient.first,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.check, color: Colors.white, size: 20),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildWelcomePage() {
     return Container(
       decoration: BoxDecoration(
@@ -409,7 +595,7 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
                 colors: [AppColors.primary, AppColors.primaryLight],
               ).createShader(bounds),
               child: Text(
-                'Kedinizin Dijital\nSağlık Asistanı',
+                'Evcil Hayvanınızın\nDijital Sağlık Asistanı',
                 style: AppTypography.displayLarge.copyWith(color: Colors.white),
                 textAlign: TextAlign.center,
               ),
@@ -419,7 +605,7 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
 
             // Subtitle with better contrast
             Text(
-              'Yapay zeka destekli öneriler ve akıllı hatırlatmalarla\nkedinizin sağlığını takip edin',
+              'Yapay zeka destekli öneriler ve akıllı hatırlatmalarla\nevcil hayvanınızın sağlığını takip edin',
               style: AppTypography.bodyLarge.copyWith(
                 color: Colors.grey.shade800,
                 fontWeight: FontWeight.w500,
@@ -501,7 +687,10 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
     ).animate().fadeIn(duration: 600.ms).slideX(begin: 0.2, end: 0);
   }
 
-  Widget _buildCatCreationPage(bool isDark) {
+  Widget _buildPetCreationPage(bool isDark) {
+    final isCat = _selectedPetType == PetType.cat;
+    final petName = isCat ? 'Kedi' : 'Köpek';
+
     return SingleChildScrollView(
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -513,13 +702,13 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
             const SizedBox(height: 20),
 
             // Title
-            const Text(
-              'İlk Kedinizi Ekleyin',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            Text(
+              'İlk ${petName}inizi Ekleyin',
+              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             Text(
-              'Kediniz hakkında birkaç bilgi alarak başlayalım',
+              '${petName}iniz hakkında birkaç bilgi alarak başlayalım',
               style: TextStyle(color: Colors.grey.shade600),
             ),
             const SizedBox(height: 32),
@@ -560,7 +749,7 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
               controller: _nameController,
               textInputAction: TextInputAction.next,
               decoration: InputDecoration(
-                hintText: 'Kedinizin adı',
+                hintText: '${petName}inizin adı',
                 filled: true,
                 fillColor: isDark ? AppColors.surfaceDark : Colors.white,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -568,6 +757,72 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
               validator: (v) => v == null || v.trim().isEmpty ? 'İsim gerekli' : null,
             ),
             const SizedBox(height: 20),
+
+            // Breed (Dog only)
+            if (!isCat) ...[
+              Text('Irk', style: const TextStyle(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              Autocomplete<String>(
+                optionsBuilder: (textEditingValue) {
+                  if (textEditingValue.text.isEmpty) {
+                    return const Iterable<String>.empty();
+                  }
+                  return AppConstants.dogBreeds.where((breed) =>
+                      breed.toLowerCase().contains(textEditingValue.text.toLowerCase()));
+                },
+                onSelected: (selection) {
+                  setState(() => _selectedBreed = selection);
+                },
+                fieldViewBuilder: (context, controller, focusNode, onSubmitted) {
+                  return TextFormField(
+                    controller: controller,
+                    focusNode: focusNode,
+                    textInputAction: TextInputAction.next,
+                    decoration: InputDecoration(
+                      hintText: 'Köpeğinizin ırkı',
+                      filled: true,
+                      fillColor: isDark ? AppColors.surfaceDark : Colors.white,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onChanged: (value) => _selectedBreed = value,
+                  );
+                },
+              ),
+              const SizedBox(height: 20),
+
+              // Size (Dog only)
+              Text('Boyut', style: const TextStyle(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: AppConstants.dogSizes.map((size) {
+                  final isSelected = _selectedSize == size;
+                  return GestureDetector(
+                    onTap: () => setState(() => _selectedSize = size),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: isSelected ? AppColors.primary.withOpacity(0.1) : Colors.white,
+                        border: Border.all(
+                          color: isSelected ? AppColors.primary : Colors.grey.shade300,
+                          width: isSelected ? 2 : 1,
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        size,
+                        style: TextStyle(
+                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                          color: isSelected ? AppColors.primary : Colors.grey.shade700,
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 20),
+            ],
 
             // Birth Date
             Text('Doğum Tarihi', style: const TextStyle(fontWeight: FontWeight.w600)),
@@ -654,6 +909,9 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
   }
 
   Widget _buildNotificationPage() {
+    final isCat = _selectedPetType == PetType.cat;
+    final petName = isCat ? 'Kedi' : 'Köpek';
+
     return SingleChildScrollView(
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -668,7 +926,7 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Kedinizin mevcut kilosunu girin. Bu bilgi sağlık önerileri için kullanılacak.',
+            '${petName}inizin mevcut kilosunu girin. Bu bilgi sağlık önerileri için kullanılacak.',
             style: TextStyle(color: Colors.grey.shade600),
           ),
           const SizedBox(height: 32),
@@ -776,7 +1034,7 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
           const SizedBox(height: 16),
           Text(
             _nameController.text.trim().isEmpty
-                ? 'Kediniz için en iyi bakımı sunmaya hazırsınız!'
+                ? 'Evcil hayvanınız için en iyi bakımı sunmaya hazırsınız!'
                 : '${_nameController.text} için en iyi bakımı sunmaya hazırsınız!',
             style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
             textAlign: TextAlign.center,
@@ -785,7 +1043,7 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
 
           _buildSummaryCard(
             Icons.pets,
-            'Kedi Bilgileri',
+            _selectedPetType == PetType.cat ? 'Kedi Bilgileri' : 'Köpek Bilgileri',
             _nameController.text.trim().isEmpty ? 'Henüz eklenmedi' : _nameController.text,
           ),
           const SizedBox(height: 16),

@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../utils/notification_service.dart';
 import 'widget_service.dart';
 import 'insights_notification_service.dart';
+import '../../data/database/database_helper.dart';
 
 /// Background App Refresh Servisi
 /// 
@@ -57,30 +58,36 @@ class BackgroundService {
   Future<void> _performRefresh() async {
     if (_isRunning) return;
     _isRunning = true;
-    
+
     try {
       debugPrint('BackgroundService: Performing refresh...');
-      
+
       // Son güncelleme zamanını kontrol et
       final prefs = await SharedPreferences.getInstance();
       final lastRefreshMs = prefs.getInt(_lastRefreshKey) ?? 0;
       final lastRefresh = DateTime.fromMillisecondsSinceEpoch(lastRefreshMs);
-      
+
       // Minimum interval kontrolü
       if (DateTime.now().difference(lastRefresh) < _minRefreshInterval) {
         debugPrint('BackgroundService: Skipping - too soon since last refresh');
         return;
       }
-      
+
       // Widget verilerini güncelle
       await _updateWidgets();
-      
+
       // Bildirimleri kontrol et
       await _checkNotifications();
-      
+
+      // Hatırlatıcı bildirimlerini yeniden zamanla (gerekirse)
+      await _checkAndRescheduleNotifications();
+
+      // Insight bildirimlerini kontrol et ve yeniden zamanla (gerekirse)
+      await _checkInsightNotifications();
+
       // Son güncelleme zamanını kaydet
       await prefs.setInt(_lastRefreshKey, DateTime.now().millisecondsSinceEpoch);
-      
+
       debugPrint('BackgroundService: Refresh completed');
     } catch (e) {
       debugPrint('BackgroundService: Error during refresh: $e');
@@ -104,8 +111,118 @@ class BackgroundService {
       // Zamanlanmış bildirimleri kontrol et
       final pendingNotifications = await NotificationService.instance.getPendingNotifications();
       debugPrint('BackgroundService: ${pendingNotifications.length} pending notifications');
+
+      // Günlük hatırlatıcıların tamamlanma durumunu kontrol et ve gerekirse sıfırla
+      await _resetDailyRemindersIfNeeded();
     } catch (e) {
       debugPrint('BackgroundService: Notification check error: $e');
+    }
+  }
+
+  /// Günlük hatırlatıcıların tamamlanma durumunu sıfırla (eğer farklı günde tamamlanmışsa)
+  /// Bu metod, günlük hatırlatıcıları her gün sıfırlar böylece kullanıcı tekrar tamamlayabilir
+  Future<void> _resetDailyRemindersIfNeeded() async {
+    try {
+      // NOT: Bu metod RemindersProvider'a bağımlılık yaratmamak için sadece log tutar
+      // Gerçek sıfırlama işlemi, uygulama açıldığında loadReminders() içinde yapılır
+      // veya RemindersProvider'da bir metod aracılığıyla yapılabilir
+
+      debugPrint('BackgroundService: Daily reminder reset check completed');
+    } catch (e) {
+      debugPrint('BackgroundService: Error resetting daily reminders: $e');
+    }
+  }
+
+  /// Hatırlatıcı bildirimlerini kontrol et ve gerekirse yeniden zamanla
+  /// Aylık/yıllık hatırlatıcılar için 30 gün ilerisi zamanlandığından,
+  /// kalan gün sayısı 7'den azsa yeni bildirimleri zamanla
+  Future<void> _checkAndRescheduleNotifications() async {
+    try {
+      final db = DatabaseHelper.instance;
+      final reminders = await db.getAllReminders();
+
+      // Aylık, yıllık veya özel periyotlu hatırlatıcıları filtrele
+      final nonNativeRepeatReminders = reminders.where((r) {
+        return r.frequency != 'daily' &&
+               r.frequency != 'weekly' &&
+               r.isActive;
+      }).toList();
+
+      if (nonNativeRepeatReminders.isEmpty) {
+        debugPrint('BackgroundService: No non-native repeat reminders to check');
+        return;
+      }
+
+      // Pending notifications al
+      final pending = await NotificationService.instance.getPendingNotifications();
+
+      for (final reminder in nonNativeRepeatReminders) {
+        // nextDate null ise skip et
+        if (reminder.nextDate == null) continue;
+
+        // Bu reminder'a ait pending notification sayısını kontrol et
+        final reminderPending = pending.where((n) {
+          // Base ID veya date-based ID kontrolü
+          final baseId = reminder.id.hashCode.abs() % 2147483647;
+          if (n.id == baseId) return true;
+
+          // Payload kontrolü
+          if (n.payload == reminder.id) return true;
+
+          return false;
+        }).length;
+
+        // Eğer 7'den az pending notification varsa, yeniden zamanla
+        if (reminderPending < 7) {
+          debugPrint('BackgroundService: Rescheduling ${reminder.title} - only $reminderPending pending notifications');
+
+          // Parse time string (HH:mm format)
+          final timeParts = reminder.time.split(':');
+          final hour = int.parse(timeParts[0]);
+          final minute = int.parse(timeParts[1]);
+
+          await NotificationService.instance.scheduleRepeatingReminder(
+            reminderId: reminder.id,
+            title: reminder.title,
+            body: reminder.notes ?? '',
+            nextOccurrence: reminder.nextDate!,
+            hour: hour,
+            minute: minute,
+            frequency: reminder.frequency,
+            payload: NotificationService.instance.createPayload(
+              reminderId: reminder.id,
+              catId: reminder.petId,
+              type: reminder.type,
+            ),
+          );
+        }
+      }
+
+      debugPrint('BackgroundService: Notification rescheduling check completed');
+    } catch (e) {
+      debugPrint('BackgroundService: Error checking/rescheduling notifications: $e');
+    }
+  }
+
+  /// Insight bildirimlerini kontrol et ve gerekirse yeniden zamanla
+  Future<void> _checkInsightNotifications() async {
+    try {
+      // Pending notifications içinde insight notification var mı kontrol et
+      final pendingNotifications = await NotificationService.instance.getPendingNotifications();
+
+      // Seasonal insight notification ID'si: _baseNotificationId + 999 (10999)
+      final hasSeasonalInsight = pendingNotifications.any((n) => n.id == 10999);
+
+      if (!hasSeasonalInsight) {
+        debugPrint('BackgroundService: Seasonal insight notification not found, needs rescheduling');
+        // NOT: Gerçek yeniden zamanlama InsightsNotificationService.scheduleWeeklySeasonalInsight
+        // aracılığıyla yapılmalı, ancak bu metod Cat listesi gerektirir
+        // Bu yüzden sadece log tutuyoruz, uygulama açıldığında yeniden zamanlanacak
+      }
+
+      debugPrint('BackgroundService: Insight notification check completed');
+    } catch (e) {
+      debugPrint('BackgroundService: Error checking insight notifications: $e');
     }
   }
   

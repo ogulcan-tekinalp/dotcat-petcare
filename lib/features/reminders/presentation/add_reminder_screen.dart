@@ -7,20 +7,26 @@ import '../../../core/utils/page_transitions.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/notification_service.dart';
 import '../../../core/services/firestore_service.dart';
+import '../../../core/services/ad_service.dart';
 import '../../../core/widgets/app_button.dart';
 import '../../../core/widgets/app_text_field.dart';
 import '../../../core/widgets/app_toast.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../../cats/providers/cats_provider.dart';
+import '../../dogs/providers/dogs_provider.dart';
 import '../providers/reminders_provider.dart';
+import '../../../data/models/pet_type.dart';
+import '../../../data/models/cat.dart';
+import '../../../data/models/dog.dart';
 
 class AddReminderScreen extends ConsumerStatefulWidget {
   final String? initialType;
   final String? preselectedCatId;
+  final Set<String>? preselectedPetIds;
   final String? initialTitle;
   final String? initialSubType;
   final dynamic reminder; // Düzenleme modu için mevcut kayıt
-  const AddReminderScreen({super.key, this.initialType, this.preselectedCatId, this.initialTitle, this.initialSubType, this.reminder});
+  const AddReminderScreen({super.key, this.initialType, this.preselectedCatId, this.preselectedPetIds, this.initialTitle, this.initialSubType, this.reminder});
 
   @override
   ConsumerState<AddReminderScreen> createState() => _AddReminderScreenState();
@@ -44,16 +50,66 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
   String? _selectedSubType;
   bool _isOtherSubType = false;
 
-  final _reminderTypes = [
-    {'type': 'dotcat_complete', 'icon': Icons.star_rounded, 'color': AppColors.primary},
-    {'type': 'vaccine', 'icon': Icons.vaccines, 'color': AppColors.vaccine},
-    {'type': 'medicine', 'icon': Icons.medication, 'color': AppColors.medicine},
-    {'type': 'vet', 'icon': Icons.local_hospital, 'color': AppColors.vet},
-    {'type': 'grooming', 'icon': Icons.content_cut, 'color': AppColors.grooming},
-    {'type': 'food', 'icon': Icons.restaurant, 'color': AppColors.food},
-    {'type': 'exercise', 'icon': Icons.fitness_center, 'color': Color(0xFFFF9800)},
-    {'type': 'weight', 'icon': Icons.monitor_weight, 'color': AppColors.warning},
-  ];
+  // Seçilen pet'lerin tiplerini kontrol et
+  bool get _hasCats {
+    final cats = ref.read(catsProvider);
+    return _selectedCatIds.any((id) => cats.any((cat) => cat.id == id));
+  }
+
+  bool get _hasDogs {
+    final dogs = ref.read(dogsProvider);
+    return _selectedCatIds.any((id) => dogs.any((dog) => dog.id == id));
+  }
+
+  // Pet type'a göre reminder types döndür
+  List<Map<String, dynamic>> get _availableReminderTypes {
+    final types = <Map<String, dynamic>>[];
+
+    // Ortak tipler (her ikisi için de)
+    types.addAll([
+      {'type': 'vaccine', 'icon': Icons.vaccines, 'color': AppColors.vaccine},
+      {'type': 'medicine', 'icon': Icons.medication, 'color': AppColors.medicine},
+      {'type': 'vet', 'icon': Icons.local_hospital, 'color': AppColors.vet},
+      {'type': 'grooming', 'icon': Icons.content_cut, 'color': AppColors.grooming},
+      {'type': 'food', 'icon': Icons.restaurant, 'color': AppColors.food},
+      {'type': 'weight', 'icon': Icons.monitor_weight, 'color': AppColors.warning},
+    ]);
+
+    // Kedi-specific
+    if (_hasCats) {
+      types.insert(0, {'type': 'dotcat_complete', 'icon': Icons.star_rounded, 'color': AppColors.primary});
+    }
+
+    // Köpek-specific
+    if (_hasDogs) {
+      types.addAll([
+        {'type': 'walk', 'icon': Icons.directions_walk, 'color': Color(0xFF4CAF50)},
+        {'type': 'training', 'icon': Icons.school, 'color': Color(0xFF2196F3)},
+        {'type': 'playtime', 'icon': Icons.sports_soccer, 'color': Color(0xFFFF9800)},
+        {'type': 'bath', 'icon': Icons.bathtub, 'color': Color(0xFF00BCD4)},
+      ]);
+    }
+
+    // Her ikisi de yoksa (henüz pet seçilmedi), hepsini göster
+    if (!_hasCats && !_hasDogs && _selectedCatIds.isEmpty) {
+      return [
+        {'type': 'dotcat_complete', 'icon': Icons.star_rounded, 'color': AppColors.primary},
+        {'type': 'vaccine', 'icon': Icons.vaccines, 'color': AppColors.vaccine},
+        {'type': 'medicine', 'icon': Icons.medication, 'color': AppColors.medicine},
+        {'type': 'vet', 'icon': Icons.local_hospital, 'color': AppColors.vet},
+        {'type': 'grooming', 'icon': Icons.content_cut, 'color': AppColors.grooming},
+        {'type': 'food', 'icon': Icons.restaurant, 'color': AppColors.food},
+        {'type': 'exercise', 'icon': Icons.fitness_center, 'color': Color(0xFFFF9800)},
+        {'type': 'weight', 'icon': Icons.monitor_weight, 'color': AppColors.warning},
+        {'type': 'walk', 'icon': Icons.directions_walk, 'color': Color(0xFF4CAF50)},
+        {'type': 'training', 'icon': Icons.school, 'color': Color(0xFF2196F3)},
+        {'type': 'playtime', 'icon': Icons.sports_soccer, 'color': Color(0xFFFF9800)},
+        {'type': 'bath', 'icon': Icons.bathtub, 'color': Color(0xFF00BCD4)},
+      ];
+    }
+
+    return types;
+  }
 
   final _frequencies = [
     {'key': 'once', 'label': 'once'},
@@ -78,13 +134,17 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
 
   Map<String, List<String>> get _subTypes => {
     'dotcat_complete': ['dotcat_complete_full'],
-    'vaccine': AppConstants.vaccineTypes,
+    'vaccine': AppConstants.catVaccineTypes, // TODO: Pet type'a göre catVaccineTypes veya dogVaccineTypes kullan
     'medicine': ['internal_parasite', 'external_parasite', 'antibiotic', 'vitamin', 'other'],
     'food': ['dry_food', 'wet_food', 'supplement', 'treat', 'other'],
     'vet': ['checkup', 'emergency', 'surgery', 'dental', 'other'],
     'grooming': ['nail_trimming', 'ear_cleaning', 'brushing', 'bathing', 'dental_care', 'eye_cleaning', 'other'],
     'exercise': ['playtime', 'walk', 'training', 'other'],
     'weight': ['weight_check'],
+    'walk': ['morning_walk', 'evening_walk', 'park_visit', 'other'],
+    'training': ['basic_commands', 'tricks', 'socialization', 'other'],
+    'playtime': ['fetch', 'tug_of_war', 'hide_and_seek', 'other'],
+    'bath': ['full_bath', 'paw_cleaning', 'other'],
   };
 
   @override
@@ -191,12 +251,22 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
       
       WidgetsBinding.instance.addPostFrameCallback((_) {
         final cats = ref.read(catsProvider);
-        if (cats.isNotEmpty) {
-          // preselectedCatId varsa onu kullan, yoksa ilk kediyi seç
-          if (widget.preselectedCatId != null) {
+        final dogs = ref.read(dogsProvider);
+        final allPets = [...cats, ...dogs];
+
+        if (allPets.isNotEmpty) {
+          // preselectedPetIds varsa (çoklu seçim), onları kullan
+          if (widget.preselectedPetIds != null && widget.preselectedPetIds!.isNotEmpty) {
+            setState(() => _selectedCatIds = widget.preselectedPetIds!);
+          }
+          // preselectedCatId varsa (tekli seçim), onu kullan
+          else if (widget.preselectedCatId != null) {
             setState(() => _selectedCatIds = {widget.preselectedCatId!});
-          } else {
-            setState(() => _selectedCatIds = {cats.first.id});
+          }
+          // Hiçbiri yoksa ilk pet'i seç
+          else {
+            final firstPet = allPets.first;
+            setState(() => _selectedCatIds = {(firstPet as dynamic).id as String});
           }
         }
       });
@@ -249,8 +319,8 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
   }
 
   int _getReminderDaysBefore() {
-    final timing = _reminderTimings.firstWhere((t) => t['key'] == _reminderTiming);
-    return timing['days'] as int;
+    final timing = _reminderTimings.where((t) => t['key'] == _reminderTiming).firstOrNull;
+    return (timing?['days'] as int?) ?? 0;
   }
 
   Future<void> _saveRecord() async {
@@ -260,7 +330,8 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
       return;
     }
 
-    if (_selectedCatIds.isEmpty) {
+    // If no preselected pet, user must select at least one
+    if (_selectedCatIds.isEmpty && widget.preselectedCatId == null) {
       _showToast(AppLocalizations.get('select_cat_required'), isError: true);
       return;
     }
@@ -327,9 +398,10 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
             scheduledDateTime.isAfter(DateTime.now());
         
         if (shouldScheduleNotification) {
-          final cat = cats.firstWhere((c) => c.id == reminder.catId);
+          final cat = cats.where((c) => c.id == reminder.catId).firstOrNull;
+          final catName = cat?.name ?? 'Kedi';
           final notificationTitle = '🐱 $title';
-          final notificationBody = '${cat.name} için $title zamanı!';
+          final notificationBody = '$catName için $title zamanı!';
           
           if (frequency == 'daily') {
             final notificationId = NotificationService.instance.generateNotificationId(reminder.id);
@@ -402,7 +474,11 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
         final shouldNotify = _enableReminder && scheduledDateTime.isAfter(now);
         
         for (final catId in _selectedCatIds) {
-          final cat = cats.firstWhere((c) => c.id == catId);
+          final cat = cats.where((c) => c.id == catId).firstOrNull;
+          if (cat == null) {
+            debugPrint('Warning: Cat with id $catId not found in cats list');
+            continue;
+          }
           await ref.read(remindersProvider.notifier).addReminder(
             catId: catId,
             catName: cat.name,
@@ -421,7 +497,16 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
 
         if (mounted) {
           AppToast.success(context, AppLocalizations.get('record_saved'));
-          Navigator.pop(context);
+
+          // Show ad after adding reminder (except first pet's first reminder)
+          final totalPets = cats.length;
+          final totalReminders = ref.read(remindersProvider).length;
+          await AdService.instance.onReminderAdded(
+            totalPets: totalPets,
+            totalReminders: totalReminders - _selectedCatIds.length, // Count before this addition
+          );
+
+          if (mounted) Navigator.pop(context);
         }
       }
     } finally {
@@ -441,26 +526,48 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final cats = ref.watch(catsProvider);
+    final dogs = ref.watch(dogsProvider);
+    final List<dynamic> allPets = [...cats, ...dogs];
+    // Sort by creation date (newest first)
+    allPets.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     final nextRecurrence = _calculateNextRecurrence();
     final subTypes = _subTypes[_selectedType] ?? [];
 
+    // Başlık - eğer initialType varsa tür adını göster
+    String appBarTitle;
+    if (widget.reminder != null) {
+      appBarTitle = AppLocalizations.get('edit_record');
+    } else if (widget.initialType != null) {
+      // İnitial type varsa tür adını başlığa ekle
+      final typeKey = 'reminder_type_${widget.initialType}';
+      final typeName = AppLocalizations.get(typeKey);
+      appBarTitle = '${AppLocalizations.get('add_record')} - $typeName';
+    } else {
+      appBarTitle = AppLocalizations.get('add_record');
+    }
+
     return Scaffold(
-      appBar: AppBar(title: Text(widget.reminder != null ? AppLocalizations.get('edit_record') : AppLocalizations.get('add_record'))),
+      appBar: AppBar(title: Text(appBarTitle)),
       body: ListView(
         physics: const BouncingScrollPhysics(), // iOS-style smooth scrolling
         padding: const EdgeInsets.all(16),
         children: [
-          // Cat selection
-          _buildSectionTitle(AppLocalizations.get('select_cats'), true),
-          const SizedBox(height: 8),
-          _buildCatSelector(cats, isDark),
-          const SizedBox(height: 20),
+          // Pet selection - sadece preselected parametreler boşsa göster
+          if ((widget.preselectedPetIds == null || widget.preselectedPetIds!.isEmpty) &&
+              widget.preselectedCatId == null) ...[
+            _buildSectionTitle(AppLocalizations.get('select_pets'), true),
+            const SizedBox(height: 8),
+            _buildCatSelector(allPets, isDark),
+            const SizedBox(height: 20),
+          ],
 
-          // Type selection
-          _buildSectionTitle(AppLocalizations.get('record_type'), true),
-          const SizedBox(height: 8),
-          _buildTypeSelector(isDark),
-          const SizedBox(height: 20),
+          // Type selection - eğer initialType yoksa göster
+          if (widget.initialType == null) ...[
+            _buildSectionTitle(AppLocalizations.get('record_type'), true),
+            const SizedBox(height: 8),
+            _buildTypeSelector(isDark),
+            const SizedBox(height: 20),
+          ],
 
           // Sub-type selection
           if (subTypes.isNotEmpty) ...[
@@ -568,7 +675,7 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
     );
   }
 
-  Widget _buildCatSelector(List<dynamic> cats, bool isDark) {
+  Widget _buildCatSelector(List<dynamic> pets, bool isDark) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -581,7 +688,7 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
           Row(
             children: [
               TextButton.icon(
-                onPressed: () => setState(() => _selectedCatIds = cats.map((c) => c.id as String).toSet()),
+                onPressed: () => setState(() => _selectedCatIds = pets.map((p) => p.id as String).toSet()),
                 icon: const Icon(Icons.select_all, size: 18),
                 label: Text(AppLocalizations.get('select_all')),
               ),
@@ -594,31 +701,40 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
             ],
           ),
           const Divider(),
-          ...cats.map((cat) {
-            final isSelected = _selectedCatIds.contains(cat.id);
+          ...pets.map((pet) {
+            final isSelected = _selectedCatIds.contains(pet.id);
+            final isCat = pet is Cat;
+            final petTypeEmoji = isCat ? '🐱' : '🐶';
+
             return ListTile(
               contentPadding: EdgeInsets.zero,
               leading: CircleAvatar(
                 radius: 20,
                 backgroundColor: AppColors.primary.withOpacity(0.1),
-                backgroundImage: cat.photoPath != null ? FileImage(File(cat.photoPath!)) : null,
-                child: cat.photoPath == null ? const Icon(Icons.pets, color: AppColors.primary, size: 20) : null,
+                backgroundImage: pet.photoPath != null ? FileImage(File(pet.photoPath!)) : null,
+                child: pet.photoPath == null ? Text(petTypeEmoji, style: const TextStyle(fontSize: 20)) : null,
               ),
-              title: Text(cat.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+              title: Row(
+                children: [
+                  Text(pet.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                  const SizedBox(width: 6),
+                  Text(petTypeEmoji, style: const TextStyle(fontSize: 14)),
+                ],
+              ),
               trailing: Checkbox(
                 value: isSelected,
                 onChanged: (v) {
                   setState(() {
-                    if (v == true) { _selectedCatIds.add(cat.id); } 
-                    else { _selectedCatIds.remove(cat.id); }
+                    if (v == true) { _selectedCatIds.add(pet.id); }
+                    else { _selectedCatIds.remove(pet.id); }
                   });
                 },
                 activeColor: AppColors.primary,
               ),
               onTap: () {
                 setState(() {
-                  if (isSelected) { _selectedCatIds.remove(cat.id); } 
-                  else { _selectedCatIds.add(cat.id); }
+                  if (isSelected) { _selectedCatIds.remove(pet.id); }
+                  else { _selectedCatIds.add(pet.id); }
                 });
               },
             );
@@ -629,6 +745,8 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
   }
 
   Widget _buildTypeSelector(bool isDark) {
+    final reminderTypes = _availableReminderTypes;
+
     return GridView.count(
       crossAxisCount: 4,
       shrinkWrap: true,
@@ -636,7 +754,7 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
       mainAxisSpacing: 8,
       crossAxisSpacing: 8,
       childAspectRatio: 0.95,
-      children: _reminderTypes.map((type) {
+      children: reminderTypes.map((type) {
         final isSelected = _selectedType == type['type'];
         final color = type['color'] as Color;
         final isDotcat = type['type'] == 'dotcat_complete';

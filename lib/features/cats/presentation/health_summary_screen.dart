@@ -9,6 +9,7 @@ import '../../../core/utils/localization.dart';
 import '../../../core/utils/date_helper.dart';
 import '../../../core/services/haptic_service.dart';
 import '../../../data/models/cat.dart';
+import '../../../data/models/dog.dart';
 import '../../../data/models/reminder.dart';
 import '../../reminders/providers/reminders_provider.dart';
 import '../../weight/providers/weight_provider.dart';
@@ -22,8 +23,8 @@ bool _photoExists(String? path) {
 
 /// Kapsamlı Sağlık Özeti Ekranı
 class HealthSummaryScreen extends ConsumerStatefulWidget {
-  final Cat cat;
-  const HealthSummaryScreen({super.key, required this.cat});
+  final dynamic pet; // Supports both Cat and Dog
+  const HealthSummaryScreen({super.key, required this.pet});
 
   @override
   ConsumerState<HealthSummaryScreen> createState() => _HealthSummaryScreenState();
@@ -38,7 +39,7 @@ class _HealthSummaryScreenState extends ConsumerState<HealthSummaryScreen> {
 
   Future<void> _loadData() async {
     await ref.read(remindersProvider.notifier).loadReminders();
-    await ref.read(weightProvider.notifier).loadWeightRecords(widget.cat.id);
+    await ref.read(weightProvider.notifier).loadWeightRecords(widget.pet.id);
   }
 
   @override
@@ -47,15 +48,15 @@ class _HealthSummaryScreenState extends ConsumerState<HealthSummaryScreen> {
     final weights = ref.watch(weightProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    final catReminders = allReminders.where((r) => r.catId == widget.cat.id).toList();
+    final petReminders = allReminders.where((r) => r.petId == widget.pet.id).toList();
     
     // İstatistikler
-    final vaccines = catReminders.where((r) => r.type == 'vaccine').toList();
-    final medicines = catReminders.where((r) => r.type == 'medicine').toList();
-    final vetVisits = catReminders.where((r) => r.type == 'vet').toList();
+    final vaccines = petReminders.where((r) => r.type == 'vaccine').toList();
+    final medicines = petReminders.where((r) => r.type == 'medicine').toList();
+    final vetVisits = petReminders.where((r) => r.type == 'vet').toList();
     
     // Sağlık skoru hesapla (basit algoritma)
-    final healthScore = _calculateHealthScore(catReminders, weights);
+    final healthScore = _calculateHealthScore(petReminders, weights);
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.backgroundDark : const Color(0xFFF5F5F5),
@@ -116,14 +117,14 @@ class _HealthSummaryScreenState extends ConsumerState<HealthSummaryScreen> {
                                   ],
                                 ),
                                 child: ClipOval(
-                                  child: _photoExists(widget.cat.photoPath)
-                                      ? (widget.cat.photoPath!.startsWith('http')
+                                  child: _photoExists(widget.pet.photoPath)
+                                      ? (widget.pet.photoPath!.startsWith('http')
                                           ? CachedNetworkImage(
-                                              imageUrl: widget.cat.photoPath!,
+                                              imageUrl: widget.pet.photoPath!,
                                               fit: BoxFit.cover,
                                             )
                                           : Image.file(
-                                              File(widget.cat.photoPath!),
+                                              File(widget.pet.photoPath!),
                                               fit: BoxFit.cover,
                                             ))
                                       : const Icon(Icons.pets, color: AppColors.primary, size: 30),
@@ -137,7 +138,7 @@ class _HealthSummaryScreenState extends ConsumerState<HealthSummaryScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      '${widget.cat.name} Sağlık Özeti',
+                                      '${widget.pet.name} Sağlık Özeti',
                                       style: const TextStyle(
                                         color: Colors.white,
                                         fontSize: 22,
@@ -146,7 +147,7 @@ class _HealthSummaryScreenState extends ConsumerState<HealthSummaryScreen> {
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
-                                      DateHelper.getAge(widget.cat.birthDate),
+                                      DateHelper.getAge(widget.pet.birthDate),
                                       style: TextStyle(
                                         color: Colors.white.withOpacity(0.9),
                                         fontSize: 14,
@@ -230,7 +231,7 @@ class _HealthSummaryScreenState extends ConsumerState<HealthSummaryScreen> {
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: _buildUpcomingSection(catReminders, isDark),
+              child: _buildUpcomingSection(petReminders, isDark),
             ).animate().fadeIn(delay: 400.ms).slideY(begin: 0.2, end: 0),
           ),
 
@@ -485,7 +486,7 @@ class _HealthSummaryScreenState extends ConsumerState<HealthSummaryScreen> {
               TextButton(
                 onPressed: () => Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => WeightScreen(cat: widget.cat)),
+                  MaterialPageRoute(builder: (_) => WeightScreen(cat: widget.pet)),
                 ),
                 child: const Text('Detay'),
               ),
@@ -946,7 +947,7 @@ class _HealthSummaryScreenState extends ConsumerState<HealthSummaryScreen> {
 
   List<String> _getHealthTips() {
     // Yaşa göre ipuçları
-    final birthDate = widget.cat.birthDate;
+    final birthDate = widget.pet.birthDate;
     final ageInMonths = DateTime.now().difference(birthDate).inDays ~/ 30;
     
     if (ageInMonths < 12) {
@@ -974,7 +975,7 @@ class _HealthSummaryScreenState extends ConsumerState<HealthSummaryScreen> {
   }
 
   Widget _buildAgeRecommendationsSection(bool isDark) {
-    final ageInMonths = DateTime.now().difference(widget.cat.birthDate).inDays ~/ 30;
+    final ageInMonths = DateTime.now().difference(widget.pet.birthDate).inDays ~/ 30;
     final ageCategory = _getAgeCategory(ageInMonths);
 
     return Container(

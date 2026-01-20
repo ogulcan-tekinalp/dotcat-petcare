@@ -20,10 +20,8 @@ import '../../weight/providers/weight_provider.dart';
 import '../../reminders/presentation/add_reminder_screen.dart';
 import '../../reminders/presentation/record_detail_screen.dart';
 import '../../weight/presentation/weight_screen.dart';
-import '../providers/cats_provider.dart';
-import '../../dogs/providers/dogs_provider.dart';
-import 'edit_cat_screen.dart';
-import '../../dogs/presentation/edit_dog_screen.dart';
+import '../providers/dogs_provider.dart';
+import 'edit_dog_screen.dart';
 
 bool _photoExists(String? path) {
   if (path == null || path.isEmpty) return false;
@@ -31,38 +29,36 @@ bool _photoExists(String? path) {
   return File(path).existsSync();
 }
 
-/// Pet Profili - Kullanışlı bakım takip ekranı (kedi ve köpek için)
-class CatProfileScreen extends ConsumerStatefulWidget {
-  final dynamic cat; // Can be Cat or Dog
-  const CatProfileScreen({super.key, required this.cat});
+/// Köpek Profili - Kullanışlı bakım takip ekranı (köpeğe özel)
+class DogProfileScreen extends ConsumerStatefulWidget {
+  final Dog dog;
+  const DogProfileScreen({super.key, required this.dog});
 
   @override
-  ConsumerState<CatProfileScreen> createState() => _CatProfileScreenState();
+  ConsumerState<DogProfileScreen> createState() => _DogProfileScreenState();
 }
 
-class _CatProfileScreenState extends ConsumerState<CatProfileScreen> {
-  late dynamic _currentPet; // Can be Cat or Dog
+class _DogProfileScreenState extends ConsumerState<DogProfileScreen> {
+  late Dog _currentDog;
 
-  // Helper getters for pet properties
-  String get _petId => _currentPet.id;
-  String get _petName => _currentPet.name;
-  DateTime get _petBirthDate => _currentPet.birthDate;
-  String? get _petBreed => _currentPet.breed;
-  String? get _petPhotoPath => _currentPet.photoPath;
-  bool get _isPetCat => _currentPet is Cat;
-  bool get _isPetDog => _currentPet is Dog;
-  PetType get _petType => _isPetCat ? PetType.cat : PetType.dog;
+  // Helper getters for dog properties
+  String get _dogId => _currentDog.id;
+  String get _dogName => _currentDog.name;
+  DateTime get _dogBirthDate => _currentDog.birthDate;
+  String? get _dogBreed => _currentDog.breed;
+  String? get _dogSize => _currentDog.size;
+  String? get _dogPhotoPath => _currentDog.photoPath;
 
   @override
   void initState() {
     super.initState();
-    _currentPet = widget.cat;
+    _currentDog = widget.dog;
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadData());
   }
 
   Future<void> _loadData() async {
     await ref.read(remindersProvider.notifier).loadReminders();
-    await ref.read(weightProvider.notifier).loadWeightRecords(_petId);
+    await ref.read(weightProvider.notifier).loadWeightRecords(_dogId);
   }
 
   @override
@@ -72,26 +68,30 @@ class _CatProfileScreenState extends ConsumerState<CatProfileScreen> {
     final completions = ref.watch(completionsProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    final catReminders = allReminders.where((r) => r.catId == _petId).toList();
-    
-    // Kategori bazlı görevler
-    final vaccines = catReminders.where((r) => r.type == 'vaccine').toList();
-    final medicines = catReminders.where((r) => r.type == 'medicine').toList();
-    final vetVisits = catReminders.where((r) => r.type == 'vet').toList();
-    final grooming = catReminders.where((r) => r.type == 'grooming').toList();
-    final food = catReminders.where((r) => r.type == 'food').toList();
+    final dogReminders = allReminders.where((r) => r.petId == _dogId).toList();
+
+    // Kategori bazlı görevler (köpeğe özel)
+    final vaccines = dogReminders.where((r) => r.type == 'vaccine').toList();
+    final medicines = dogReminders.where((r) => r.type == 'medicine').toList();
+    final vetVisits = dogReminders.where((r) => r.type == 'vet').toList();
+    final grooming = dogReminders.where((r) => r.type == 'grooming').toList();
+    final food = dogReminders.where((r) => r.type == 'food').toList();
+    final walks = dogReminders.where((r) => r.type == 'walk').toList();
+    final training = dogReminders.where((r) => r.type == 'training').toList();
+    final playtime = dogReminders.where((r) => r.type == 'playtime').toList();
+    final bath = dogReminders.where((r) => r.type == 'bath').toList();
     
     // Yaklaşan görevler (7 gün içinde)
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final upcomingTasks = catReminders.where((r) {
+    final upcomingTasks = dogReminders.where((r) {
       if (!r.isActive || r.nextDate == null) return false;
       final diff = r.nextDate!.difference(today).inDays;
       return diff >= 0 && diff <= 7;
     }).toList()..sort((a, b) => a.nextDate!.compareTo(b.nextDate!));
 
     // Gecikmiş görevler
-    final overdueTasks = catReminders.where((r) {
+    final overdueTasks = dogReminders.where((r) {
       if (!r.isActive || r.nextDate == null) return false;
       final reminderDate = DateTime(r.nextDate!.year, r.nextDate!.month, r.nextDate!.day);
       if (!reminderDate.isBefore(today)) return false;
@@ -134,7 +134,7 @@ class _CatProfileScreenState extends ConsumerState<CatProfileScreen> {
             
             // Tüm Kayıtlar
             SliverToBoxAdapter(
-              child: _buildAllRecordsSection(catReminders, isDark),
+              child: _buildAllRecordsSection(dogReminders, isDark),
             ),
             
             const SliverToBoxAdapter(child: SizedBox(height: 100)),
@@ -174,19 +174,11 @@ class _CatProfileScreenState extends ConsumerState<CatProfileScreen> {
         IconButton(
           icon: const Icon(Icons.edit_outlined),
           onPressed: () async {
-            if (_isPetCat) {
-              final updated = await Navigator.push<Cat>(
-                context,
-                PageTransitions.slide(page: EditCatScreen(cat: _currentPet as Cat)),
-              );
-              if (updated != null) setState(() => _currentPet = updated);
-            } else {
-              final updated = await Navigator.push<Dog>(
-                context,
-                PageTransitions.slide(page: EditDogScreen(dog: _currentPet as Dog)),
-              );
-              if (updated != null) setState(() => _currentPet = updated);
-            }
+            final updated = await Navigator.push<Dog>(
+              context,
+              PageTransitions.slide(page: EditDogScreen(dog: _currentDog)),
+            );
+            if (updated != null) setState(() => _currentDog = updated);
           },
         ),
         PopupMenuButton<String>(
@@ -243,12 +235,12 @@ class _CatProfileScreenState extends ConsumerState<CatProfileScreen> {
                     child: CircleAvatar(
                       radius: 46,
                       backgroundColor: AppColors.primary.withOpacity(0.2),
-                      backgroundImage: _photoExists(_petPhotoPath)
-                          ? (_petPhotoPath!.startsWith('http')
-                              ? CachedNetworkImageProvider(_petPhotoPath!)
-                              : FileImage(File(_petPhotoPath!)) as ImageProvider)
+                      backgroundImage: _photoExists(_dogPhotoPath)
+                          ? (_dogPhotoPath!.startsWith('http')
+                              ? CachedNetworkImageProvider(_dogPhotoPath!)
+                              : FileImage(File(_dogPhotoPath!)) as ImageProvider)
                           : null,
-                      child: !_photoExists(_petPhotoPath)
+                      child: !_photoExists(_dogPhotoPath)
                           ? const Icon(Icons.pets_rounded, size: 46, color: Colors.white)
                           : null,
                     ),
@@ -264,7 +256,7 @@ class _CatProfileScreenState extends ConsumerState<CatProfileScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
-                          _petName,
+                          _dogName,
                           style: AppTypography.displayMedium.copyWith(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
@@ -279,9 +271,9 @@ class _CatProfileScreenState extends ConsumerState<CatProfileScreen> {
                         ).animate()
                             .fadeIn(duration: 500.ms, delay: 200.ms)
                             .slideX(begin: -0.2, end: 0, duration: 500.ms, curve: Curves.easeOutCubic),
-                        if (_petBreed != null && _petBreed!.isNotEmpty)
+                        if (_dogBreed != null && _dogBreed!.isNotEmpty)
                           Text(
-                            _petBreed!,
+                            _dogBreed!,
                             style: AppTypography.bodyLarge.copyWith(
                               color: Colors.white.withOpacity(0.95),
                             ),
@@ -291,7 +283,7 @@ class _CatProfileScreenState extends ConsumerState<CatProfileScreen> {
                         const SizedBox(height: 14),
                         Row(
                           children: [
-                            _buildInfoChip(Icons.cake_outlined, DateHelper.getAge(_petBirthDate))
+                            _buildInfoChip(Icons.cake_outlined, DateHelper.getAge(_dogBirthDate))
                                 .animate()
                                 .fadeIn(duration: 500.ms, delay: 400.ms)
                                 .scale(delay: 400.ms, duration: 400.ms),
@@ -426,7 +418,7 @@ class _CatProfileScreenState extends ConsumerState<CatProfileScreen> {
             child: GestureDetector(
               onTap: () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => RecordDetailScreen(record: task, catName: _petName)),
+                MaterialPageRoute(builder: (_) => RecordDetailScreen(record: task, catName: _dogName)),
               ),
               child: Container(
                 padding: const EdgeInsets.all(12),
@@ -504,29 +496,91 @@ class _CatProfileScreenState extends ConsumerState<CatProfileScreen> {
             ),
           ),
           const SizedBox(height: 12),
+          // İlk satır - Köpeğe özel aksiyonlar
           Row(
             children: [
               _buildQuickActionButton(
-                icon: Icons.monitor_weight_outlined,
-                label: 'Kilo Ekle',
-                color: AppColors.warning,
+                icon: Icons.directions_walk,
+                label: 'Yürüyüş',
+                color: AppColors.secondary,
                 onTap: () => Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => WeightScreen(cat: _currentPet)),
+                  MaterialPageRoute(builder: (_) => AddReminderScreen(
+                    preselectedCatId: _dogId,
+                    initialType: 'walk',
+                  )),
                 ),
                 isDark: isDark,
               ),
               const SizedBox(width: 12),
               _buildQuickActionButton(
+                icon: Icons.school_outlined,
+                label: 'Eğitim',
+                color: AppColors.accent,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => AddReminderScreen(
+                    preselectedCatId: _dogId,
+                    initialType: 'training',
+                  )),
+                ),
+                isDark: isDark,
+              ),
+              const SizedBox(width: 12),
+              _buildQuickActionButton(
+                icon: Icons.sports_esports_outlined,
+                label: 'Oyun',
+                color: AppColors.primary,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => AddReminderScreen(
+                    preselectedCatId: _dogId,
+                    initialType: 'playtime',
+                  )),
+                ),
+                isDark: isDark,
+              ),
+              const SizedBox(width: 12),
+              _buildQuickActionButton(
+                icon: Icons.bathtub_outlined,
+                label: 'Banyo',
+                color: AppColors.info,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => AddReminderScreen(
+                    preselectedCatId: _dogId,
+                    initialType: 'bath',
+                  )),
+                ),
+                isDark: isDark,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // İkinci satır - Genel aksiyonlar
+          Row(
+            children: [
+              _buildQuickActionButton(
                 icon: Icons.vaccines_outlined,
-                label: 'Aşı Ekle',
+                label: 'Aşı',
                 color: AppColors.vaccine,
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => AddReminderScreen(
-                    preselectedCatId: _petId,
+                    preselectedCatId: _dogId,
                     initialType: 'vaccine',
                   )),
+                ),
+                isDark: isDark,
+              ),
+              const SizedBox(width: 12),
+              _buildQuickActionButton(
+                icon: Icons.monitor_weight_outlined,
+                label: 'Kilo',
+                color: AppColors.warning,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => WeightScreen(cat: _currentDog)),
                 ),
                 isDark: isDark,
               ),
@@ -538,7 +592,7 @@ class _CatProfileScreenState extends ConsumerState<CatProfileScreen> {
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => AddReminderScreen(
-                    preselectedCatId: _petId,
+                    preselectedCatId: _dogId,
                     initialType: 'grooming',
                   )),
                 ),
@@ -552,7 +606,7 @@ class _CatProfileScreenState extends ConsumerState<CatProfileScreen> {
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => AddReminderScreen(
-                    preselectedCatId: _petId,
+                    preselectedCatId: _dogId,
                     initialType: 'vet',
                   )),
                 ),
@@ -654,7 +708,7 @@ class _CatProfileScreenState extends ConsumerState<CatProfileScreen> {
         HapticService.instance.tap();
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => RecordDetailScreen(record: task, catName: _petName)),
+          MaterialPageRoute(builder: (_) => RecordDetailScreen(record: task, catName: _dogName)),
         );
       },
       child: Container(
@@ -740,10 +794,10 @@ class _CatProfileScreenState extends ConsumerState<CatProfileScreen> {
     required bool isDark,
   }) {
     final allReminders = ref.watch(remindersProvider);
-    final catReminders = allReminders.where((r) => r.catId == _petId).toList();
-    final food = catReminders.where((r) => r.type == 'food').toList();
-    final dotcat = catReminders.where((r) => r.type == 'dotcat_complete').toList();
-    final exercise = catReminders.where((r) => r.type == 'exercise').toList();
+    final dogReminders = allReminders.where((r) => r.catId == _dogId).toList();
+    final food = dogReminders.where((r) => r.type == 'food').toList();
+    final dotcat = dogReminders.where((r) => r.type == 'dotcat_complete').toList();
+    final exercise = dogReminders.where((r) => r.type == 'exercise').toList();
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
@@ -851,7 +905,7 @@ class _CatProfileScreenState extends ConsumerState<CatProfileScreen> {
                 isDark: isDark,
                 onTap: () => Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => WeightScreen(cat: _currentPet)),
+                  MaterialPageRoute(builder: (_) => WeightScreen(cat: _currentDog)),
                 ),
               ),
             ],
@@ -976,7 +1030,7 @@ class _CatProfileScreenState extends ConsumerState<CatProfileScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                '${_petName} için ilk hatırlatıcıyı ekleyerek başlayın',
+                '${_dogName} için ilk hatırlatıcıyı ekleyerek başlayın',
                 style: TextStyle(
                   fontSize: 13,
                   color: AppColors.textSecondary,
@@ -1039,7 +1093,7 @@ class _CatProfileScreenState extends ConsumerState<CatProfileScreen> {
         HapticService.instance.tap();
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => RecordDetailScreen(record: reminder, catName: _petName)),
+          MaterialPageRoute(builder: (_) => RecordDetailScreen(record: reminder, catName: _dogName)),
         );
       },
       child: Container(
@@ -1123,7 +1177,7 @@ class _CatProfileScreenState extends ConsumerState<CatProfileScreen> {
                           Navigator.pop(ctx);
                           Navigator.push(context, MaterialPageRoute(
                             builder: (_) => AddReminderScreen(
-                              preselectedCatId: _petId,
+                              preselectedCatId: _dogId,
                               initialType: _getCategoryType(title),
                             ),
                           ));
@@ -1167,8 +1221,8 @@ class _CatProfileScreenState extends ConsumerState<CatProfileScreen> {
       final confirm = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: Text(_isPetCat ? AppLocalizations.get('delete_cat') : AppLocalizations.get('delete_dog')),
-          content: Text(AppLocalizations.get('delete_cat_confirm')),
+          title: Text(AppLocalizations.get('delete_dog')),
+          content: Text(AppLocalizations.get('delete_dog_confirm')),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
@@ -1182,11 +1236,7 @@ class _CatProfileScreenState extends ConsumerState<CatProfileScreen> {
         ),
       );
       if (confirm == true && mounted) {
-        if (_isPetCat) {
-          await ref.read(catsProvider.notifier).deleteCat(_petId);
-        } else {
-          await ref.read(dogsProvider.notifier).deleteDog(_petId);
-        }
+        await ref.read(dogsProvider.notifier).deleteDog(_dogId);
         if (mounted) Navigator.pop(context);
       }
     }
@@ -1303,13 +1353,13 @@ class _CatProfileScreenState extends ConsumerState<CatProfileScreen> {
         if (type == 'weight') {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => WeightScreen(cat: _currentPet)),
+            MaterialPageRoute(builder: (_) => WeightScreen(cat: _currentDog)),
           );
         } else {
           Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => AddReminderScreen(
-              preselectedCatId: _petId,
+              preselectedCatId: _dogId,
               initialType: type,
             )),
           );

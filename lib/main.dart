@@ -11,6 +11,9 @@ import 'core/providers/language_provider.dart';
 import 'core/services/sync_service.dart';
 import 'core/services/fcm_service.dart';
 import 'core/services/widget_service.dart';
+import 'core/services/reminder_migration_service.dart';
+import 'core/services/ad_service.dart';
+import 'core/services/premium_service.dart';
 import 'features/onboarding/presentation/splash_screen.dart';
 
 // Theme mode provider
@@ -43,7 +46,15 @@ class AppInitState {
 final appInitProvider = FutureProvider<AppInitState>((ref) async {
   String? error;
   bool firebaseReady = false;
-  
+
+  // 0. Initialize language FIRST (before Firebase)
+  try {
+    await AppLocalizations.initLanguage();
+    debugPrint('✅ Language initialized: ${AppLocalizations.currentLanguage}');
+  } catch (e) {
+    debugPrint('⚠️ Language init error: $e');
+  }
+
   // 1. Firebase init
   try {
     await Firebase.initializeApp();
@@ -83,8 +94,31 @@ final appInitProvider = FutureProvider<AppInitState>((ref) async {
     } catch (e) {
       debugPrint('⚠️ WidgetService init error: $e');
     }
+
+    try {
+      await ReminderMigrationService.instance.runMigrationIfNeeded();
+      debugPrint('✅ ReminderMigrationService completed');
+    } catch (e) {
+      debugPrint('⚠️ ReminderMigrationService error: $e');
+    }
+
+    // Initialize Ad Service
+    try {
+      await AdService.instance.init();
+      debugPrint('✅ AdService initialized');
+    } catch (e) {
+      debugPrint('⚠️ AdService init error: $e');
+    }
+
+    // Initialize Premium Service
+    try {
+      await PremiumService.instance.init();
+      debugPrint('✅ PremiumService initialized');
+    } catch (e) {
+      debugPrint('⚠️ PremiumService init error: $e');
+    }
   }
-  
+
   return AppInitState(firebaseReady: firebaseReady, error: error);
 });
 

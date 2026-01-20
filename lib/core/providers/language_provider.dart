@@ -8,8 +8,8 @@ final languageProvider = StateNotifierProvider<LanguageNotifier, AppLanguage>((r
 class LanguageNotifier extends StateNotifier<AppLanguage> {
   LanguageNotifier() : super(AppLocalizations.currentLanguage);
 
-  void setLanguage(AppLanguage language) {
-    AppLocalizations.setLanguage(language);
+  void setLanguage(AppLanguage language) async {
+    await AppLocalizations.setLanguage(language);
     state = language;
   }
 

@@ -1,6 +1,6 @@
 class Reminder {
   final String id;
-  final String catId;
+  final String petId; // Pet ID (supports both cats and dogs)
   final String title;
   final String type; // food, medicine, vet, vaccine, dotcat_complete
   final String time; // HH:mm format
@@ -10,10 +10,11 @@ class Reminder {
   final String? notes;
   final DateTime createdAt;
   final DateTime? nextDate;
+  final DateTime? lastCompletionDate; // Track when reminder was last completed
 
   Reminder({
     required this.id,
-    required this.catId,
+    required this.petId,
     required this.title,
     required this.type,
     required this.time,
@@ -23,12 +24,16 @@ class Reminder {
     this.notes,
     required this.createdAt,
     this.nextDate,
+    this.lastCompletionDate,
   });
+
+  // Legacy support: catId getter for backwards compatibility
+  String get catId => petId;
 
   Map<String, dynamic> toMap() {
     return {
       'id': id,
-      'catId': catId,
+      'petId': petId, // Unified field name for database
       'title': title,
       'type': type,
       'time': time,
@@ -38,23 +43,73 @@ class Reminder {
       'notes': notes,
       'createdAt': createdAt.toIso8601String(),
       'nextDate': nextDate?.toIso8601String(),
+      'lastCompletionDate': lastCompletionDate?.toIso8601String(),
     };
   }
 
-  factory Reminder.fromMap(Map<String, dynamic> map) {
+  /// Create from Firestore data (uses 'catId' for backwards compatibility)
+  factory Reminder.fromFirestore(Map<String, dynamic> map) {
     return Reminder(
       id: map['id'] as String,
-      catId: map['catId'] as String,
+      petId: (map['catId'] ?? map['petId']) as String, // Support both field names from Firestore
       title: map['title'] as String,
       type: map['type'] as String,
       time: map['time'] as String,
       frequency: map['frequency'] as String? ?? 'daily',
-      isActive: map['isActive'] == 1,
-      isCompleted: map['isCompleted'] == 1,
+      isActive: map['isActive'] == 1 || map['isActive'] == true,
+      isCompleted: map['isCompleted'] == 1 || map['isCompleted'] == true,
+      notes: map['notes'] as String?,
+      createdAt: _parseDateTime(map['createdAt']),
+      nextDate: map['nextDate'] != null ? _parseDateTime(map['nextDate']) : null,
+      lastCompletionDate: map['lastCompletionDate'] != null ? _parseDateTime(map['lastCompletionDate']) : null,
+    );
+  }
+
+  /// Create from local database (uses 'petId')
+  factory Reminder.fromMap(Map<String, dynamic> map) {
+    return Reminder(
+      id: map['id'] as String,
+      petId: (map['petId'] ?? map['catId']) as String, // Support both for migration
+      title: map['title'] as String,
+      type: map['type'] as String,
+      time: map['time'] as String,
+      frequency: map['frequency'] as String? ?? 'daily',
+      isActive: map['isActive'] == 1 || map['isActive'] == true,
+      isCompleted: map['isCompleted'] == 1 || map['isCompleted'] == true,
       notes: map['notes'] as String?,
       createdAt: DateTime.parse(map['createdAt'] as String),
       nextDate: map['nextDate'] != null ? DateTime.parse(map['nextDate'] as String) : null,
+      lastCompletionDate: map['lastCompletionDate'] != null ? DateTime.parse(map['lastCompletionDate'] as String) : null,
     );
+  }
+
+  /// Helper to parse DateTime from various formats (Timestamp, String, DateTime)
+  static DateTime _parseDateTime(dynamic value) {
+    if (value is DateTime) return value;
+    if (value is String) return DateTime.parse(value);
+    // Handle Firestore Timestamp
+    if (value != null && value.runtimeType.toString().contains('Timestamp')) {
+      return (value as dynamic).toDate();
+    }
+    return DateTime.now();
+  }
+
+  /// Convert to Firestore format (uses 'catId' for backwards compatibility)
+  Map<String, dynamic> toFirestore() {
+    return {
+      'id': id,
+      'catId': petId, // Firestore uses 'catId' for backwards compatibility
+      'title': title,
+      'type': type,
+      'time': time,
+      'frequency': frequency,
+      'isActive': isActive,
+      'isCompleted': isCompleted,
+      'notes': notes,
+      'createdAt': createdAt.toIso8601String(),
+      'nextDate': nextDate?.toIso8601String(),
+      'lastCompletionDate': lastCompletionDate?.toIso8601String(),
+    };
   }
 
   Reminder copyWith({
@@ -67,10 +122,11 @@ class Reminder {
     String? notes,
     DateTime? createdAt,
     DateTime? nextDate,
+    DateTime? lastCompletionDate,
   }) {
     return Reminder(
       id: id,
-      catId: catId,
+      petId: petId,
       title: title ?? this.title,
       type: type ?? this.type,
       time: time ?? this.time,
@@ -80,6 +136,7 @@ class Reminder {
       notes: notes ?? this.notes,
       createdAt: createdAt ?? this.createdAt,
       nextDate: nextDate ?? this.nextDate,
+      lastCompletionDate: lastCompletionDate ?? this.lastCompletionDate,
     );
   }
 

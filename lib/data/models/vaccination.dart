@@ -1,6 +1,6 @@
 class Vaccination {
   final String id;
-  final String catId;
+  final String petId; // Pet ID (supports both cats and dogs)
   final String name;
   final DateTime date;
   final DateTime? nextDate;
@@ -11,7 +11,7 @@ class Vaccination {
 
   Vaccination({
     required this.id,
-    required this.catId,
+    required this.petId,
     required this.name,
     required this.date,
     this.nextDate,
@@ -20,6 +20,9 @@ class Vaccination {
     this.notes,
     required this.createdAt,
   });
+
+  // Legacy support: catId getter for backwards compatibility
+  String get catId => petId;
 
   bool get isUpcoming {
     if (nextDate == null || isCompleted) return false;
@@ -41,7 +44,7 @@ class Vaccination {
   Map<String, dynamic> toMap() {
     return {
       'id': id,
-      'catId': catId,
+      'catId': petId, // Database field still named 'catId' for compatibility
       'name': name,
       'date': date.toIso8601String(),
       'nextDate': nextDate?.toIso8601String(),
@@ -55,7 +58,7 @@ class Vaccination {
   factory Vaccination.fromMap(Map<String, dynamic> map) {
     return Vaccination(
       id: map['id'] as String,
-      catId: map['catId'] as String,
+      petId: map['catId'] as String, // Read from 'catId' field for compatibility
       name: map['name'] as String,
       date: DateTime.parse(map['date'] as String),
       nextDate: map['nextDate'] != null ? DateTime.parse(map['nextDate'] as String) : null,
@@ -76,7 +79,7 @@ class Vaccination {
   }) {
     return Vaccination(
       id: id,
-      catId: catId,
+      petId: petId,
       name: name ?? this.name,
       date: date ?? this.date,
       nextDate: nextDate ?? this.nextDate,

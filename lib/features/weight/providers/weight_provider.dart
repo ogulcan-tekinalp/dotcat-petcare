@@ -40,7 +40,7 @@ class WeightNotifier extends StateNotifier<List<WeightRecord>> {
   }) async {
     final record = WeightRecord(
       id: _uuid.v4(),
-      catId: catId,
+      petId: catId,
       weight: weight,
       notes: notes,
       recordedAt: DateTime.now(),

@@ -13,14 +13,23 @@ class NotificationService {
   NotificationService._init();
 
   /// Generate a unique notification ID from reminder ID and optional date
+  /// Uses a more robust hashing to minimize collision risk
   /// This ensures each reminder instance gets a unique notification ID
   int generateNotificationId(String reminderId, {DateTime? date}) {
-    if (date != null) {
-      // For recurring notifications, include date in the hash
-      final dateStr = '${date.year}${date.month}${date.day}';
-      return '$reminderId-$dateStr'.hashCode.abs() % 2147483647;
+    // Use a custom hash function to minimize collisions
+    // Based on djb2 hash algorithm which has better distribution than String.hashCode
+    int hash = 5381;
+    final input = date != null
+        ? '$reminderId-${date.year}${date.month.toString().padLeft(2, '0')}${date.day.toString().padLeft(2, '0')}'
+        : reminderId;
+
+    for (int i = 0; i < input.length; i++) {
+      hash = ((hash << 5) + hash) + input.codeUnitAt(i);
+      hash = hash & 0x7FFFFFFF; // Keep positive and within 32-bit range
     }
-    return reminderId.hashCode.abs() % 2147483647;
+
+    // Ensure the result is within valid notification ID range (positive int)
+    return hash % 2147483647;
   }
 
   /// Create a rich payload for notification navigation
@@ -325,7 +334,15 @@ class NotificationService {
     }
     
     try {
-      final scheduled = tz.TZDateTime.from(dateTime, tz.local);
+      // Use consistent timezone pattern
+      final scheduled = tz.TZDateTime(
+        tz.local,
+        dateTime.year,
+        dateTime.month,
+        dateTime.day,
+        dateTime.hour,
+        dateTime.minute,
+      );
       final now = tz.TZDateTime.now(tz.local);
 
       if (scheduled.isBefore(now)) {
@@ -367,7 +384,9 @@ class NotificationService {
   }
 
   /// Schedule a repeating reminder based on frequency
-  /// This handles weekly, monthly, yearly etc. by scheduling the next occurrence
+  /// This handles daily, weekly, monthly, yearly etc.
+  /// Daily and weekly use native repeating notifications (no app open needed)
+  /// Monthly/yearly/custom intervals schedule multiple future occurrences
   Future<void> scheduleRepeatingReminder({
     required String reminderId,
     required String title,
@@ -385,6 +404,8 @@ class NotificationService {
     }
 
     try {
+      final now = DateTime.now();
+
       // Calculate the exact notification time
       final scheduledDateTime = DateTime(
         nextOccurrence.year,
@@ -393,19 +414,18 @@ class NotificationService {
         hour,
         minute,
       );
-      
-      final now = DateTime.now();
-      
+
       if (scheduledDateTime.isBefore(now)) {
         debugPrint('NotificationService: Next occurrence is in the past, skipping - scheduled: $scheduledDateTime');
         return;
       }
 
-      final notificationId = generateNotificationId(reminderId, date: nextOccurrence);
-      
-      // For weekly reminders, we can use the built-in weekly repeat
-      if (frequency == 'weekly') {
-        final scheduled = tz.TZDateTime.from(scheduledDateTime, tz.local);
+      final scheduled = tz.TZDateTime.from(scheduledDateTime, tz.local);
+
+      // GÜNLÜK HATIRLATICILAR: Native daily repeat kullan
+      if (frequency == 'daily') {
+        final notificationId = generateNotificationId(reminderId);
+
         await _notifications.zonedSchedule(
           notificationId,
           title,
@@ -415,7 +435,7 @@ class NotificationService {
             android: AndroidNotificationDetails(
               'dotcat_reminders',
               'Hatirlaticilar',
-              channelDescription: 'DOTCAT hatirlaticilari',
+              channelDescription: 'DOTCAT gunluk hatirlaticilari',
               importance: Importance.high,
               priority: Priority.high,
               playSound: true,
@@ -431,25 +451,162 @@ class NotificationService {
           androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
           uiLocalNotificationDateInterpretation:
               UILocalNotificationDateInterpretation.absoluteTime,
-          matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
+          matchDateTimeComponents: DateTimeComponents.time, // Her gün aynı saatte tekrar eder
           payload: payload,
         );
-        debugPrint('NotificationService: Weekly reminder scheduled - id: $notificationId, dateTime: $scheduled');
-      } else {
-        // For other frequencies (monthly, yearly, custom), schedule a one-time notification
-        // The app will reschedule the next one when this fires or when opened
-        await scheduleOneTimeReminder(
-          id: notificationId,
-          title: title,
-          body: body,
-          dateTime: scheduledDateTime,
+        debugPrint('NotificationService: Daily reminder scheduled with native repeat - id: $notificationId, time: ${scheduled.hour}:${scheduled.minute}');
+      }
+      // HAFTALIK HATIRLATICILAR: Native weekly repeat kullan
+      else if (frequency == 'weekly') {
+        final notificationId = generateNotificationId(reminderId);
+
+        await _notifications.zonedSchedule(
+          notificationId,
+          title,
+          body,
+          scheduled,
+          const NotificationDetails(
+            android: AndroidNotificationDetails(
+              'dotcat_reminders',
+              'Hatirlaticilar',
+              channelDescription: 'DOTCAT haftalik hatirlaticilari',
+              importance: Importance.high,
+              priority: Priority.high,
+              playSound: true,
+              enableVibration: true,
+              showWhen: true,
+            ),
+            iOS: DarwinNotificationDetails(
+              presentAlert: true,
+              presentBadge: true,
+              presentSound: true,
+            ),
+          ),
+          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+          uiLocalNotificationDateInterpretation:
+              UILocalNotificationDateInterpretation.absoluteTime,
+          matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime, // Her hafta aynı gün ve saatte tekrar eder
           payload: payload,
         );
-        debugPrint('NotificationService: Repeating reminder ($frequency) scheduled as one-time - id: $notificationId');
+        debugPrint('NotificationService: Weekly reminder scheduled with native repeat - id: $notificationId, weekday: ${scheduled.weekday}, time: ${scheduled.hour}:${scheduled.minute}');
+      }
+      // AYLIK/YILLIK/ÖZEL: Gelecek 30 gün için bildirimler zamanla (hybrid approach)
+      else {
+        // Önce mevcut bildirimleri iptal et
+        await cancelReminderNotifications(reminderId);
+
+        // Gelecek oluşumları hesapla ve zamanla (30 gün ileri)
+        final occurrences = _calculateFutureOccurrences(
+          startDate: nextOccurrence,
+          frequency: frequency,
+          maxDays: 30, // 30 gün ileri (background service will reschedule)
+        );
+
+        debugPrint('NotificationService: Scheduling ${occurrences.length} occurrences for $frequency reminder');
+
+        for (final occurrence in occurrences) {
+          final occurrenceDateTime = DateTime(
+            occurrence.year,
+            occurrence.month,
+            occurrence.day,
+            hour,
+            minute,
+          );
+
+          if (occurrenceDateTime.isAfter(now)) {
+            final notificationId = generateNotificationId(reminderId, date: occurrence);
+
+            await scheduleOneTimeReminder(
+              id: notificationId,
+              title: title,
+              body: body,
+              dateTime: occurrenceDateTime,
+              payload: payload, // Pass payload for navigation
+            );
+          }
+        }
+
+        debugPrint('NotificationService: Scheduled ${occurrences.length} future occurrences for $frequency reminder');
       }
     } catch (e) {
       debugPrint('NotificationService: Error scheduling repeating reminder: $e');
     }
+  }
+
+  /// Gelecek oluşumları hesapla (aylık, yıllık, özel periyotlar için)
+  List<DateTime> _calculateFutureOccurrences({
+    required DateTime startDate,
+    required String frequency,
+    required int maxDays,
+  }) {
+    final occurrences = <DateTime>[];
+    var current = startDate;
+    final endDate = DateTime.now().add(Duration(days: maxDays));
+
+    while (current.isBefore(endDate) && occurrences.length < 100) { // Maksimum 100 bildirim
+      occurrences.add(current);
+
+      // Sonraki oluşumu hesapla (month-end safe calculations)
+      switch (frequency) {
+        case 'monthly':
+          // Safe date calculation for month-end dates
+          int nextMonth = current.month + 1;
+          int nextYear = current.year;
+          if (nextMonth > 12) {
+            nextMonth = 1;
+            nextYear++;
+          }
+          // Clamp day to valid range for target month
+          int maxDay = DateTime(nextYear, nextMonth + 1, 0).day;
+          int safeDay = current.day > maxDay ? maxDay : current.day;
+          current = DateTime(nextYear, nextMonth, safeDay);
+          break;
+        case 'quarterly':
+          // Safe date calculation for quarterly (3 months)
+          int nextMonth = current.month + 3;
+          int nextYear = current.year;
+          while (nextMonth > 12) {
+            nextMonth -= 12;
+            nextYear++;
+          }
+          int maxDay = DateTime(nextYear, nextMonth + 1, 0).day;
+          int safeDay = current.day > maxDay ? maxDay : current.day;
+          current = DateTime(nextYear, nextMonth, safeDay);
+          break;
+        case 'biannual':
+          // Safe date calculation for biannual (6 months)
+          int nextMonth = current.month + 6;
+          int nextYear = current.year;
+          while (nextMonth > 12) {
+            nextMonth -= 12;
+            nextYear++;
+          }
+          int maxDay = DateTime(nextYear, nextMonth + 1, 0).day;
+          int safeDay = current.day > maxDay ? maxDay : current.day;
+          current = DateTime(nextYear, nextMonth, safeDay);
+          break;
+        case 'yearly':
+          // Safe date calculation for yearly (handles Feb 29)
+          int nextYear = current.year + 1;
+          int maxDay = DateTime(nextYear, current.month + 1, 0).day;
+          int safeDay = current.day > maxDay ? maxDay : current.day;
+          current = DateTime(nextYear, current.month, safeDay);
+          break;
+        case '2days':
+          current = current.add(const Duration(days: 2));
+          break;
+        case '3days':
+          current = current.add(const Duration(days: 3));
+          break;
+        case '14days':
+          current = current.add(const Duration(days: 14));
+          break;
+        default:
+          return occurrences; // Bilinmeyen frekans
+      }
+    }
+
+    return occurrences;
   }
 
   /// Get all pending notifications (for debugging)
@@ -477,9 +634,9 @@ class NotificationService {
         }
       }
       
-      // Ayrıca gelecek 30 gün için tarihli ID'leri de ekle (daha verimli)
+      // Ayrıca gelecek 90 gün için tarihli ID'leri de ekle (extended cancellation range)
       final now = DateTime.now();
-      for (int i = 0; i < 30; i++) {
+      for (int i = 0; i < 90; i++) {
         final date = now.add(Duration(days: i));
         idsToCancel.add(generateNotificationId(reminderId, date: date));
       }

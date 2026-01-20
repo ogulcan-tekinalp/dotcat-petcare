@@ -14,6 +14,7 @@ import '../../../core/services/auth_service.dart';
 import '../../../core/services/migration_service.dart';
 import '../../home/presentation/home_screen.dart';
 import '../../cats/providers/cats_provider.dart';
+import '../../dogs/providers/dogs_provider.dart';
 import '../../reminders/providers/reminders_provider.dart';
 import '../../reminders/providers/completions_provider.dart';
 
@@ -37,8 +38,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
-  bool _isSignUp = false;
   bool _obscurePassword = true;
+  bool _isSignUp = false;
 
   @override
   void initState() {
@@ -227,6 +228,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
     try {
       debugPrint('LoginScreen: Refreshing providers after login...');
       await ref.read(catsProvider.notifier).loadCats();
+      await ref.read(dogsProvider.notifier).loadDogs();
       await ref.read(remindersProvider.notifier).loadReminders();
       await ref.read(completionsProvider.notifier).refresh();
       debugPrint('LoginScreen: Providers refreshed successfully');
@@ -250,7 +252,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+    final cats = ref.watch(catsProvider);
+    final dogs = ref.watch(dogsProvider);
+
+    // Determine pet type for message
+    String petMessage = 'Evcil hayvanınızı başarıyla kaydettik! Şimdi hesabınızı oluşturun ve verilerinizi güvende tutun.';
+    if (dogs.isNotEmpty && cats.isEmpty) {
+      petMessage = 'Köpeğinizi başarıyla kaydettik! Şimdi hesabınızı oluşturun ve verilerinizi güvende tutun.';
+    } else if (cats.isNotEmpty && dogs.isEmpty) {
+      petMessage = 'Kedinizi başarıyla kaydettik! Şimdi hesabınızı oluşturun ve verilerinizi güvende tutun.';
+    }
+
     return Scaffold(
       backgroundColor: isDark ? AppColors.backgroundDark : Colors.grey.shade50,
       body: SafeArea(
@@ -300,7 +312,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(
-                            'Kedinizi başarıyla kaydettik! Şimdi hesabınızı oluşturun ve verilerinizi güvende tutun.',
+                            petMessage,
                             style: TextStyle(color: AppColors.primary, fontSize: 14),
                           ),
                         ),
@@ -501,10 +513,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
                         TextButton(
                           onPressed: () => setState(() => _isSignUp = !_isSignUp),
                           child: Text(
-                            _isSignUp 
+                            _isSignUp
                               ? AppLocalizations.get('already_have_account') + ' ' + AppLocalizations.get('sign_in')
                               : AppLocalizations.get('dont_have_account') + ' ' + AppLocalizations.get('sign_up'),
-                            style: TextStyle(color: AppColors.primary),
+                            style: const TextStyle(color: AppColors.primary),
                           ),
                         ),
                       ],

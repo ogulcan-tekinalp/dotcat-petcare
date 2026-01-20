@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:convert';
 import '../../data/models/cat.dart';
+import '../../data/models/dog.dart';
 import '../../data/models/reminder.dart';
 import '../../data/models/weight_record.dart';
 import '../../data/models/reminder_completion.dart';
@@ -42,12 +43,42 @@ class FirestoreService {
     return snapshot.docs.map((doc) => Cat.fromMap(doc.data())).toList();
   }
 
+  // ============ DOGS ============
+  Future<void> saveDog(Dog dog) async {
+    if (!isLoggedIn) {
+      throw Exception('User must be logged in to save data');
+    }
+    await _db.collection('users').doc(_userId).collection('dogs').doc(dog.id).set(dog.toMap());
+  }
+
+  Future<void> deleteDog(String dogId) async {
+    if (!isLoggedIn) {
+      throw Exception('User must be logged in to delete data');
+    }
+    await _db.collection('users').doc(_userId).collection('dogs').doc(dogId).delete();
+    // İlgili reminder ve weight kayıtlarını da sil
+    final reminders = await _db.collection('users').doc(_userId).collection('reminders').where('catId', isEqualTo: dogId).get();
+    for (var doc in reminders.docs) {
+      await doc.reference.delete();
+    }
+    final weights = await _db.collection('users').doc(_userId).collection('weights').where('catId', isEqualTo: dogId).get();
+    for (var doc in weights.docs) {
+      await doc.reference.delete();
+    }
+  }
+
+  Future<List<Dog>> getDogs() async {
+    if (!isLoggedIn) return [];
+    final snapshot = await _db.collection('users').doc(_userId).collection('dogs').get();
+    return snapshot.docs.map((doc) => Dog.fromMap(doc.data())).toList();
+  }
+
   // ============ REMINDERS ============
   Future<void> saveReminder(Reminder reminder) async {
     if (!isLoggedIn) {
       throw Exception('User must be logged in to save data');
     }
-    await _db.collection('users').doc(_userId).collection('reminders').doc(reminder.id).set(reminder.toMap());
+    await _db.collection('users').doc(_userId).collection('reminders').doc(reminder.id).set(reminder.toFirestore());
   }
 
   Future<void> deleteReminder(String reminderId) async {
@@ -60,7 +91,7 @@ class FirestoreService {
   Future<List<Reminder>> getReminders() async {
     if (!isLoggedIn) return [];
     final snapshot = await _db.collection('users').doc(_userId).collection('reminders').get();
-    return snapshot.docs.map((doc) => Reminder.fromMap(doc.data())).toList();
+    return snapshot.docs.map((doc) => Reminder.fromFirestore(doc.data())).toList();
   }
 
   // ============ WEIGHTS ============
@@ -68,7 +99,7 @@ class FirestoreService {
     if (!isLoggedIn) {
       throw Exception('User must be logged in to save data');
     }
-    await _db.collection('users').doc(_userId).collection('weights').doc(weight.id).set(weight.toMap());
+    await _db.collection('users').doc(_userId).collection('weights').doc(weight.id).set(weight.toFirestore());
   }
 
   Future<void> deleteWeight(String weightId) async {
@@ -81,7 +112,7 @@ class FirestoreService {
   Future<List<WeightRecord>> getWeights() async {
     if (!isLoggedIn) return [];
     final snapshot = await _db.collection('users').doc(_userId).collection('weights').get();
-    return snapshot.docs.map((doc) => WeightRecord.fromMap(doc.data())).toList();
+    return snapshot.docs.map((doc) => WeightRecord.fromFirestore(doc.data())).toList();
   }
 
   // ============ REMINDER COMPLETIONS ============
@@ -152,21 +183,29 @@ class FirestoreService {
   // ============ FULL SYNC ============
   Future<void> syncFromCloud({
     required Future<void> Function(Cat) onCat,
+    Future<void> Function(Dog)? onDog,
     required Future<void> Function(Reminder) onReminder,
     required Future<void> Function(WeightRecord) onWeight,
   }) async {
     if (!isLoggedIn) return;
-    
+
     final cats = await getCats();
     for (var cat in cats) {
       await onCat(cat);
     }
-    
+
+    if (onDog != null) {
+      final dogs = await getDogs();
+      for (var dog in dogs) {
+        await onDog(dog);
+      }
+    }
+
     final reminders = await getReminders();
     for (var reminder in reminders) {
       await onReminder(reminder);
     }
-    
+
     final weights = await getWeights();
     for (var weight in weights) {
       await onWeight(weight);

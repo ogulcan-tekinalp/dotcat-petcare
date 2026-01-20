@@ -485,7 +485,7 @@ class _RecordDetailScreenState extends ConsumerState<RecordDetailScreen> {
     
     final updatedReminder = Reminder(
       id: widget.record.id,
-      catId: widget.record.catId,
+      petId: widget.record.petId,
       title: _titleController.text,
       type: _selectedType,
       time: timeString,

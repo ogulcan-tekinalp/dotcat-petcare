@@ -5,11 +5,12 @@ import '../../../core/utils/date_helper.dart';
 import '../../../core/utils/localization.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../data/models/cat.dart';
+import '../../../data/models/dog.dart';
 import '../providers/vaccination_provider.dart';
 
 class VaccinationScreen extends ConsumerStatefulWidget {
-  final Cat cat;
-  const VaccinationScreen({super.key, required this.cat});
+  final dynamic pet; // Supports both Cat and Dog
+  const VaccinationScreen({super.key, required this.pet});
 
   @override
   ConsumerState<VaccinationScreen> createState() => _VaccinationScreenState();
@@ -20,20 +21,20 @@ class _VaccinationScreenState extends ConsumerState<VaccinationScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(vaccinationProvider.notifier).loadVaccinations(widget.cat.id);
+      ref.read(vaccinationProvider.notifier).loadVaccinations(widget.pet.id);
     });
   }
 
   @override
   Widget build(BuildContext context) {
     final vaccinations = ref.watch(vaccinationProvider);
-    final catVaccinations = vaccinations.where((v) => v.catId == widget.cat.id).toList();
-    final upcoming = catVaccinations.where((v) => v.isUpcoming && !v.isCompleted).toList();
-    final overdue = catVaccinations.where((v) => v.isOverdue && !v.isCompleted).toList();
+    final petVaccinations = vaccinations.where((v) => v.petId == widget.pet.id).toList();
+    final upcoming = petVaccinations.where((v) => v.isUpcoming && !v.isCompleted).toList();
+    final overdue = petVaccinations.where((v) => v.isOverdue && !v.isCompleted).toList();
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      appBar: AppBar(title: Text('${widget.cat.name} - ${AppLocalizations.get('vaccination')}')),
+      appBar: AppBar(title: Text('${widget.pet.name} - ${AppLocalizations.get('vaccination')}')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -52,10 +53,10 @@ class _VaccinationScreenState extends ConsumerState<VaccinationScreen> {
           ),
           const SizedBox(height: 8),
 
-          if (catVaccinations.isEmpty)
+          if (petVaccinations.isEmpty)
             _buildEmptyState(isDark)
           else
-            ...catVaccinations.map((v) => Padding(padding: const EdgeInsets.only(bottom: 10), child: _buildVaccinationCard(v, isDark))),
+            ...petVaccinations.map((v) => Padding(padding: const EdgeInsets.only(bottom: 10), child: _buildVaccinationCard(v, isDark))),
         ],
       ),
       floatingActionButton: FloatingActionButton(
@@ -218,6 +219,10 @@ class _VaccinationScreenState extends ConsumerState<VaccinationScreen> {
     DateTime? nextDate;
     final vetController = TextEditingController();
 
+    // Determine vaccine types based on pet type
+    final isCat = widget.pet is Cat;
+    final vaccineTypes = isCat ? AppConstants.catVaccineTypes : AppConstants.dogVaccineTypes;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -237,7 +242,7 @@ class _VaccinationScreenState extends ConsumerState<VaccinationScreen> {
               DropdownButtonFormField<String>(
                 value: selectedVaccine,
                 decoration: InputDecoration(labelText: AppLocalizations.get('vaccine_type')),
-                items: AppConstants.vaccineTypes.map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
+                items: vaccineTypes.map((v) => DropdownMenuItem(value: v, child: Text(v))).toList(),
                 onChanged: (v) => setModalState(() => selectedVaccine = v),
               ),
               const SizedBox(height: 12),
@@ -266,8 +271,8 @@ class _VaccinationScreenState extends ConsumerState<VaccinationScreen> {
               ElevatedButton(
                 onPressed: selectedVaccine == null ? null : () {
                   ref.read(vaccinationProvider.notifier).addVaccination(
-                    catId: widget.cat.id,
-                    catName: widget.cat.name,
+                    catId: widget.pet.id,
+                    catName: widget.pet.name,
                     name: selectedVaccine!,
                     date: selectedDate,
                     nextDate: nextDate,

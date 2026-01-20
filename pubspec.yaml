@@ -1,7 +1,7 @@
 name: dotcat
 description: "dotcat PetCare - Cat Care Assistant"
 publish_to: 'none'
-version: 1.0.0+2
+version: 1.0.3+5
 
 environment:
   sdk: ^3.10.3
@@ -45,6 +45,13 @@ dependencies:
   confetti: ^0.8.0
   flutter_animate: ^4.5.2
   vibration: ^2.0.1
+  # Ads & Monetization
+  google_mobile_ads: ^5.2.0
+  # In-App Purchases
+  purchases_flutter: ^9.10.7
+  # URL Launcher
+  url_launcher: ^6.2.5
+  purchases_ui_flutter: ^9.10.7
 
 dev_dependencies:
   flutter_test:

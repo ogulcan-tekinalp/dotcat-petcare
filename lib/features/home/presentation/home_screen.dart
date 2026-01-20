@@ -18,18 +18,24 @@ import '../../../core/widgets/app_badge.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../../../core/services/widget_service.dart';
 import '../../../core/widgets/app_toast.dart';
+import '../../../data/models/cat.dart';
+import '../../../data/models/dog.dart';
 import '../../../data/models/reminder_completion.dart';
 import '../../cats/providers/cats_provider.dart';
+import '../../dogs/providers/dogs_provider.dart';
 import '../../reminders/providers/reminders_provider.dart';
 import '../../reminders/providers/completions_provider.dart';
 import '../../cats/presentation/cat_profile_screen.dart';
+import '../../dogs/presentation/dog_profile_screen.dart';
 import '../../cats/presentation/add_cat_screen.dart';
+import '../../dogs/presentation/add_dog_screen.dart';
 import '../../reminders/presentation/add_reminder_screen.dart';
 import '../../reminders/presentation/record_detail_screen.dart';
 import '../../insights/presentation/insights_screen.dart';
 import '../../insights/providers/insights_provider.dart';
 import '../../../core/services/insights_service.dart';
 import '../../../core/services/insights_notification_service.dart';
+import '../../../data/models/pet_type.dart';
 import 'calendar_screen.dart';
 import 'settings_screen.dart';
 
@@ -377,7 +383,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          AppLocalizations.get('my_cats'),
+                          AppLocalizations.get('my_pets'),
                           style: AppTypography.bodyLarge.copyWith(
                             color: _currentIndex == 1 ? Colors.white : AppColors.textSecondary,
                             fontWeight: FontWeight.bold,
@@ -397,6 +403,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   Widget _buildHomePage() {
     final cats = ref.watch(catsProvider);
+    final dogs = ref.watch(dogsProvider);
     final reminders = ref.watch(remindersProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final now = DateTime.now();
@@ -736,11 +743,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       child: ListView(
                         scrollDirection: Axis.horizontal,
                         children: [
-                          _buildCatFilterChip(null, AppLocalizations.get('all_cats'), null),
+                          _buildCatFilterChip(null, AppLocalizations.get('all_pets'), null),
                           const SizedBox(width: 6),
                           ...cats.map((cat) => Padding(
                             padding: const EdgeInsets.only(right: 6),
                             child: _buildCatFilterChip(cat.id, cat.name, cat.photoPath),
+                          )),
+                          ...dogs.map((dog) => Padding(
+                            padding: const EdgeInsets.only(right: 6),
+                            child: _buildCatFilterChip(dog.id, dog.name, dog.photoPath),
                           )),
                         ],
                       ),
@@ -1723,6 +1734,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   void _showFilterModal() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final cats = ref.read(catsProvider);
+    final dogs = ref.read(dogsProvider);
 
     showModalBottomSheet(
       context: context,
@@ -1776,44 +1788,86 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
             const SizedBox(height: 24),
 
-            // Kedi Filtresi
-            if (cats.length > 1) ...[
-              Text(
-                'Kediler',
-                style: AppTypography.titleMedium.copyWith(
-                  fontWeight: FontWeight.bold,
+            // Evcil Hayvan Filtresi
+            if (cats.isNotEmpty || dogs.isNotEmpty) ...[
+              if (cats.isNotEmpty) ...[
+                Text(
+                  cats.length > 1 ? 'Kediler' : 'Kedi',
+                  style: AppTypography.titleMedium.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: cats.map((cat) {
-                  final isSelected = _selectedCatIds.contains(cat.id);
-                  return FilterChip(
-                    label: Text(cat.name),
-                    selected: isSelected,
-                    onSelected: (selected) {
-                      setState(() {
-                        if (selected) {
-                          _selectedCatIds.add(cat.id);
-                        } else {
-                          _selectedCatIds.remove(cat.id);
-                        }
-                      });
-                      Navigator.pop(context);
-                    },
-                    backgroundColor: isDark ? AppColors.surfaceDark : Colors.grey.shade100,
-                    selectedColor: AppColors.primary.withOpacity(0.2),
-                    checkmarkColor: AppColors.primary,
-                    labelStyle: TextStyle(
-                      color: isSelected ? AppColors.primary : (isDark ? Colors.white70 : Colors.black87),
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                    ),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 24),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: cats.map((cat) {
+                    final isSelected = _selectedCatIds.contains(cat.id);
+                    return FilterChip(
+                      label: Text(cat.name),
+                      selected: isSelected,
+                      onSelected: (selected) {
+                        setState(() {
+                          if (selected) {
+                            _selectedCatIds.add(cat.id);
+                          } else {
+                            _selectedCatIds.remove(cat.id);
+                          }
+                        });
+                        Navigator.pop(context);
+                      },
+                      backgroundColor: isDark ? AppColors.surfaceDark : Colors.grey.shade100,
+                      selectedColor: AppColors.primary.withOpacity(0.2),
+                      checkmarkColor: AppColors.primary,
+                      labelStyle: TextStyle(
+                        color: isSelected ? AppColors.primary : (isDark ? Colors.white70 : Colors.black87),
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 16),
+              ],
+
+              if (dogs.isNotEmpty) ...[
+                Text(
+                  dogs.length > 1 ? 'Köpekler' : 'Köpek',
+                  style: AppTypography.titleMedium.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: dogs.map((dog) {
+                    final isSelected = _selectedCatIds.contains(dog.id);
+                    return FilterChip(
+                      label: Text(dog.name),
+                      selected: isSelected,
+                      onSelected: (selected) {
+                        setState(() {
+                          if (selected) {
+                            _selectedCatIds.add(dog.id);
+                          } else {
+                            _selectedCatIds.remove(dog.id);
+                          }
+                        });
+                        Navigator.pop(context);
+                      },
+                      backgroundColor: isDark ? AppColors.surfaceDark : Colors.grey.shade100,
+                      selectedColor: AppColors.info.withOpacity(0.2),
+                      checkmarkColor: AppColors.info,
+                      labelStyle: TextStyle(
+                        color: isSelected ? AppColors.info : (isDark ? Colors.white70 : Colors.black87),
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 16),
+              ],
+              const SizedBox(height: 8),
             ],
 
             // Tip Filtresi
@@ -1985,9 +2039,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   Future<void> _goToAddRecord(String type) async {
     final cats = ref.read(catsProvider);
-    if (cats.isEmpty) {
+    final dogs = ref.read(dogsProvider);
+
+    if (cats.isEmpty && dogs.isEmpty) {
       AppToast.show(
-        context, 
+        context,
         message: AppLocalizations.get('add_cat_first'),
         type: ToastType.warning,
         onTap: () => Navigator.push(
@@ -1997,7 +2053,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       );
       return;
     }
-    
+
     // Bildirim izni kontrolü
     final hasPermission = await NotificationService.instance.requestPermission();
     if (!hasPermission) {
@@ -2023,10 +2079,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   Navigator.pop(context);
                   final granted = await NotificationService.instance.requestPermission();
                   if (granted && mounted) {
-                    Navigator.push(
-                      context,
-                      PageTransitions.fadeSlide(page: AddReminderScreen(initialType: type)),
-                    );
+                    _showPetSelectionForRecord(type);
                   } else if (mounted) {
                     AppToast.error(context, AppLocalizations.get('notification_permission_required'));
                   }
@@ -2040,24 +2093,267 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       }
       return;
     }
-    
-    Navigator.push(
-      context,
-      PageTransitions.fadeSlide(page: AddReminderScreen(initialType: type)),
+
+    // Hayvan seçim ekranını göster
+    _showPetSelectionForRecord(type);
+  }
+
+  void _showPetSelectionForRecord(String type) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cats = ref.read(catsProvider);
+    final dogs = ref.read(dogsProvider);
+    final List<dynamic> allPets = [...cats, ...dogs];
+
+    // Eğer tek hayvan varsa direkt kayıt sayfasına git
+    if (allPets.length == 1) {
+      Navigator.push(
+        context,
+        PageTransitions.fadeSlide(
+          page: AddReminderScreen(
+            initialType: type,
+            preselectedCatId: allPets.first.id,
+          ),
+        ),
+      );
+      return;
+    }
+
+    // Çoklu seçim için state
+    final selectedPetIds = <String>{};
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) => Container(
+          decoration: BoxDecoration(
+            color: isDark ? AppColors.surfaceDark : Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Handle
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Başlık
+              Text(
+                'Hangi hayvanlar için kayıt eklemek istersiniz?',
+                style: AppTypography.headlineMedium.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Birden fazla seçebilirsiniz',
+                style: TextStyle(
+                  color: isDark ? Colors.white70 : Colors.black54,
+                  fontSize: 14,
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Hayvan listesi
+              ListView.builder(
+                shrinkWrap: true,
+                itemCount: allPets.length,
+                itemBuilder: (context, index) {
+                  final pet = allPets[index];
+                  final isPetCat = pet is Cat;
+                  final isSelected = selectedPetIds.contains(pet.id);
+
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: InkWell(
+                      onTap: () {
+                        setModalState(() {
+                          if (isSelected) {
+                            selectedPetIds.remove(pet.id);
+                          } else {
+                            selectedPetIds.add(pet.id);
+                          }
+                        });
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                            ? (isPetCat ? AppColors.primary : AppColors.info).withOpacity(0.1)
+                            : (isDark ? AppColors.surfaceDark : Colors.grey.shade100),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: isSelected
+                              ? (isPetCat ? AppColors.primary : AppColors.info)
+                              : Colors.transparent,
+                            width: 2,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            // Fotoğraf veya emoji
+                            Container(
+                              width: 56,
+                              height: 56,
+                              decoration: BoxDecoration(
+                                color: (isPetCat ? AppColors.primary : AppColors.info).withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: pet.photoPath != null && pet.photoPath!.isNotEmpty
+                                ? ClipRRect(
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: Image.network(
+                                      pet.photoPath!,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (context, error, stackTrace) {
+                                        return Center(
+                                          child: Text(
+                                            isPetCat ? '🐱' : '🐶',
+                                            style: const TextStyle(fontSize: 28),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  )
+                                : Center(
+                                    child: Text(
+                                      isPetCat ? '🐱' : '🐶',
+                                      style: const TextStyle(fontSize: 28),
+                                    ),
+                                  ),
+                            ),
+                            const SizedBox(width: 16),
+
+                            // İsim
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    pet.name,
+                                    style: AppTypography.titleMedium.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    isPetCat ? 'Kedi' : 'Köpek',
+                                    style: TextStyle(
+                                      color: isDark ? Colors.white70 : Colors.black54,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            // Seçim göstergesi
+                            if (isSelected)
+                              Icon(
+                                Icons.check_circle,
+                                color: isPetCat ? AppColors.primary : AppColors.info,
+                                size: 28,
+                              )
+                            else
+                              Icon(
+                                Icons.circle_outlined,
+                                color: Colors.grey.shade400,
+                                size: 28,
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+
+              const SizedBox(height: 16),
+
+              // Devam butonu
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: ElevatedButton(
+                  onPressed: selectedPetIds.isEmpty
+                    ? null
+                    : () {
+                        Navigator.pop(ctx);
+                        Navigator.push(
+                          context,
+                          PageTransitions.fadeSlide(
+                            page: AddReminderScreen(
+                              initialType: type,
+                              preselectedPetIds: selectedPetIds,
+                            ),
+                          ),
+                        );
+                      },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    disabledBackgroundColor: Colors.grey.shade300,
+                  ),
+                  child: Text(
+                    selectedPetIds.isEmpty
+                      ? 'Hayvan seçin'
+                      : 'Devam (${selectedPetIds.length} hayvan)',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+              SizedBox(height: MediaQuery.of(context).padding.bottom + 16),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
   Widget _buildCatsPage() {
     final cats = ref.watch(catsProvider);
+    final dogs = ref.watch(dogsProvider);
     final reminders = ref.watch(remindersProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    // Combine cats and dogs into a single list with metadata
+    final List<Map<String, dynamic>> pets = [
+      ...cats.map((cat) => {'pet': cat, 'type': PetType.cat}),
+      ...dogs.map((dog) => {'pet': dog, 'type': PetType.dog}),
+    ];
+
+    // Sort by createdAt descending
+    pets.sort((a, b) {
+      final petA = a['pet'];
+      final petB = b['pet'];
+      return petB.createdAt.compareTo(petA.createdAt);
+    });
 
     return CustomScrollView(
       slivers: [
         SliverAppBar(
           floating: true,
           centerTitle: false,
-          title: Text(AppLocalizations.get('my_cats'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 24)),
+          title: Text(AppLocalizations.get('my_pets'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 24)),
           actions: [
             IconButton(
               icon: Container(
@@ -2065,14 +2361,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
                 child: const Icon(Icons.add, color: AppColors.primary),
               ),
-              onPressed: () => Navigator.push(
-                context,
-                PageTransitions.fadeSlide(page: const AddCatScreen()),
-              ),
+              onPressed: () => _showAddPetDialog(),
             ),
           ],
         ),
-        if (cats.isEmpty)
+        if (pets.isEmpty)
           SliverFillRemaining(
             child: Center(
               child: Padding(
@@ -2087,20 +2380,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     child: const Icon(Icons.pets_rounded, size: 50, color: AppColors.primary),
                   ),
                   const SizedBox(height: 24),
-                  Text(AppLocalizations.get('no_cats'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                  Text(AppLocalizations.get('no_pets'), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
-                  Text(AppLocalizations.get('add_your_first_cat'), style: TextStyle(color: context.textSecondary, fontSize: 15), textAlign: TextAlign.center),
+                  Text(AppLocalizations.get('add_your_first_pet'), style: TextStyle(color: context.textSecondary, fontSize: 15), textAlign: TextAlign.center),
                   const SizedBox(height: 32),
                   SizedBox(
                     width: double.infinity,
                     height: 56,
                     child: ElevatedButton.icon(
-                      onPressed: () => Navigator.push(
-                context,
-                PageTransitions.fadeSlide(page: const AddCatScreen()),
-              ),
+                      onPressed: _showAddPetDialog,
                       icon: const Icon(Icons.add),
-                      label: Text(AppLocalizations.get('add_cat'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                      label: Text(AppLocalizations.get('add_pet'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
                         foregroundColor: Colors.white,
@@ -2117,8 +2407,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             padding: const EdgeInsets.all(16),
             sliver: SliverList(
               delegate: SliverChildBuilderDelegate((context, index) {
-                final cat = cats[index];
-                final catReminders = reminders.where((r) => r.catId == cat.id).toList();
+                final petData = pets[index];
+                final pet = petData['pet'];
+                final petType = petData['type'] as PetType;
+                final petReminders = reminders.where((r) => r.catId == pet.id).toList();
                 final now = DateTime.now();
                 final today = DateTime(now.year, now.month, now.day);
                 
@@ -2132,9 +2424,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 final rangeStart = today.subtract(const Duration(days: 90));
                 final rangeEnd = today.add(const Duration(days: 90));
                 
-                for (final reminder in catReminders) {
+                for (final reminder in petReminders) {
                   // Ana sayfadaki _generateOccurrences mantığını kullan
-                  final occurrences = _generateOccurrences(reminder, cat, rangeStart, rangeEnd, currentCompletedDates);
+                  final occurrences = _generateOccurrences(reminder, pet, rangeStart, rangeEnd, currentCompletedDates);
                   
                   for (final item in occurrences) {
                     // Sadece tamamlanmamış olanları say
@@ -2150,10 +2442,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: GestureDetector(
-                    onTap: () => Navigator.push(
-                      context,
-                      PageTransitions.slide(page: CatProfileScreen(cat: cat)),
-                    ),
+                    onTap: () {
+                      // Navigate to appropriate profile screen based on pet type
+                      if (petType == PetType.cat) {
+                        Navigator.push(
+                          context,
+                          PageTransitions.slide(page: CatProfileScreen(cat: pet)),
+                        );
+                      } else {
+                        Navigator.push(
+                          context,
+                          PageTransitions.slide(page: DogProfileScreen(dog: pet)),
+                        );
+                      }
+                    },
                     child: Container(
                       padding: const EdgeInsets.all(18),
                       decoration: BoxDecoration(
@@ -2166,21 +2468,30 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         boxShadow: AppShadows.large,
                       ),
                       child: Row(children: [
-                        _buildCatPhoto(cat.photoPath, radius: 32, iconSize: 28),
+                        _buildCatPhoto(pet.photoPath, radius: 32, iconSize: 28),
                         const SizedBox(width: 16),
                         Expanded(
                           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            Text(cat.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                            if (cat.breed != null && cat.breed!.isNotEmpty) ...[
+                            Row(
+                              children: [
+                                Text(pet.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                                const SizedBox(width: 8),
+                                Text(
+                                  petType == PetType.cat ? '🐱' : '🐶',
+                                  style: const TextStyle(fontSize: 16),
+                                ),
+                              ],
+                            ),
+                            if (pet.breed != null && pet.breed!.isNotEmpty) ...[
                               const SizedBox(height: 2),
-                              Text(cat.breed!, style: TextStyle(fontSize: 13, color: context.textSecondary)),
+                              Text(pet.breed!, style: TextStyle(fontSize: 13, color: context.textSecondary)),
                             ],
                             const SizedBox(height: 8),
                             Row(children: [
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                 decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-                                child: Text(DateHelper.getAge(cat.birthDate), style: const TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w500)),
+                                child: Text(DateHelper.getAge(pet.birthDate), style: const TextStyle(fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.w500)),
                               ),
                               if (overdueCount > 0) ...[
                                 const SizedBox(width: 8),
@@ -2206,10 +2517,131 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     ),
                   ),
                 );
-              }, childCount: cats.length),
+              }, childCount: pets.length),
           ),
         ),
       ],
+    );
+  }
+
+  void _showAddPetDialog() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: isDark ? AppColors.surfaceDark : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                AppLocalizations.get('add_pet'),
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildPetTypeCard(
+                      context: ctx,
+                      title: AppLocalizations.get('add_cat'),
+                      emoji: '🐱',
+                      color: AppColors.primary,
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        Navigator.push(
+                          context,
+                          PageTransitions.fadeSlide(page: const AddCatScreen()),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: _buildPetTypeCard(
+                      context: ctx,
+                      title: AppLocalizations.get('add_dog'),
+                      emoji: '🐶',
+                      color: AppColors.info,
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        Navigator.push(
+                          context,
+                          PageTransitions.fadeSlide(page: const AddDogScreen()),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPetTypeCard({
+    required BuildContext context,
+    required String title,
+    IconData? icon,
+    String? emoji,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: color.withOpacity(0.3),
+            width: 2,
+          ),
+        ),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.2),
+                shape: BoxShape.circle,
+              ),
+              child: emoji != null
+                ? Text(emoji, style: const TextStyle(fontSize: 32))
+                : Icon(icon, size: 32, color: color),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
     );
   }
 

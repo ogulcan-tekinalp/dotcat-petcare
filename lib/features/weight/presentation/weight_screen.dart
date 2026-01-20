@@ -6,12 +6,14 @@ import '../../../core/utils/date_helper.dart';
 import '../../../core/utils/localization.dart';
 import '../../../core/services/insights_service.dart';
 import '../../../data/models/cat.dart';
+import '../../../data/models/dog.dart';
+import '../../../data/models/pet_type.dart';
 import '../../../data/models/weight_record.dart';
 import '../../reminders/presentation/add_reminder_screen.dart';
 import '../providers/weight_provider.dart';
 
 class WeightScreen extends ConsumerStatefulWidget {
-  final Cat cat;
+  final dynamic cat; // Can be Cat or Dog
   const WeightScreen({super.key, required this.cat});
 
   @override
@@ -21,11 +23,17 @@ class WeightScreen extends ConsumerStatefulWidget {
 class _WeightScreenState extends ConsumerState<WeightScreen> {
   DateTime _selectedDate = DateTime.now();
 
+  // Helper getters
+  String get _petId => widget.cat.id;
+  String get _petName => widget.cat.name;
+  bool get _isPetCat => widget.cat is Cat;
+  bool get _isPetDog => widget.cat is Dog;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(weightProvider.notifier).loadWeightRecords(widget.cat.id);
+      ref.read(weightProvider.notifier).loadWeightRecords(_petId);
     });
   }
 
@@ -35,10 +43,12 @@ class _WeightScreenState extends ConsumerState<WeightScreen> {
     final latest = weights.isNotEmpty ? weights.first : null;
     final change = ref.read(weightProvider.notifier).getWeightChange();
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
-    // İdeal kilo aralığı
+
+    // İdeal kilo aralığı - Cat için mevcut metod, Dog için yeni metod kullan
     final insightsService = InsightsService.instance;
-    final idealRange = insightsService.getIdealWeightRange(widget.cat);
+    final idealRange = _isPetCat
+        ? insightsService.getIdealWeightRange(widget.cat as Cat)
+        : insightsService.getDogIdealWeightRange(widget.cat as Dog);
     final trend = weights.length >= 3 ? insightsService.calculateWeightTrend(weights) : WeightTrend.insufficient;
     
     // Mevcut kilo durumu
@@ -56,7 +66,7 @@ class _WeightScreenState extends ConsumerState<WeightScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('${widget.cat.name} - ${AppLocalizations.get('weight_tracking')}'),
+        title: Text('${_petName} - ${AppLocalizations.get('weight_tracking')}'),
         actions: [
           IconButton(
             tooltip: AppLocalizations.get('add_weight'),
@@ -582,7 +592,7 @@ class _WeightScreenState extends ConsumerState<WeightScreen> {
               if (weight != null && weight > 0) {
                 try {
                   await ref.read(weightProvider.notifier).addWeightRecord(
-                    catId: widget.cat.id,
+                    catId: _petId,
                     weight: weight,
                     // kaydı seçili tarih ile oluştur
                   );
@@ -612,7 +622,7 @@ class _WeightScreenState extends ConsumerState<WeightScreen> {
       MaterialPageRoute(
         builder: (_) => AddReminderScreen(
           initialType: 'weight',
-          preselectedCatId: widget.cat.id,
+          preselectedCatId: _petId,
         ),
       ),
     );

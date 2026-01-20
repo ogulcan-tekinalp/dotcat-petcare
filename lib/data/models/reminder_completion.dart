@@ -28,5 +28,17 @@ class ReminderCompletion {
       completedAt: DateTime.parse(map['completedAt'] as String),
     );
   }
+
+  ReminderCompletion copyWith({
+    DateTime? completedDate,
+    DateTime? completedAt,
+  }) {
+    return ReminderCompletion(
+      id: id,
+      reminderId: reminderId,
+      completedDate: completedDate ?? this.completedDate,
+      completedAt: completedAt ?? this.completedAt,
+    );
+  }
 }
 

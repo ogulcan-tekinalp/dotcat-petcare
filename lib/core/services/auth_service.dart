@@ -61,7 +61,8 @@ class AuthService {
       if (currentUser != null && currentUser.isAnonymous) {
         debugPrint('Google Sign In: Linking anonymous account...');
         // Store previous UID for migration
-        _previousAnonymousUserId = currentUser.uid;
+        final anonymousUid = currentUser.uid;
+        _previousAnonymousUserId = anonymousUid;
         debugPrint('Google Sign In: Stored previous anonymous UID: $_previousAnonymousUserId');
 
         try {
@@ -70,9 +71,14 @@ class AuthService {
           return result;
         } catch (e) {
           debugPrint('Google Sign In: Link failed, trying regular sign in: $e');
-          _previousAnonymousUserId = null; // Clear since link failed
+          // IMPORTANT: Keep the anonymous UID for migration even if link fails
+          // The user's anonymous data should be migrated to their existing account
           // If link fails (e.g., account already exists), sign in normally
-          return await _auth.signInWithCredential(credential);
+          final result = await _auth.signInWithCredential(credential);
+          // Keep _previousAnonymousUserId so data can be migrated to existing account
+          _previousAnonymousUserId = anonymousUid;
+          debugPrint('Google Sign In: Regular sign in successful, will migrate data from $anonymousUid');
+          return result;
         }
       }
 
@@ -125,7 +131,8 @@ class AuthService {
       if (currentUser != null && currentUser.isAnonymous) {
         debugPrint('Apple Sign In: Linking anonymous account...');
         // Store previous UID for migration
-        _previousAnonymousUserId = currentUser.uid;
+        final anonymousUid = currentUser.uid;
+        _previousAnonymousUserId = anonymousUid;
         debugPrint('Apple Sign In: Stored previous anonymous UID: $_previousAnonymousUserId');
 
         try {
@@ -133,9 +140,12 @@ class AuthService {
           debugPrint('Apple Sign In: Link successful, new UID: ${userCredential.user?.uid}');
         } catch (e) {
           debugPrint('Apple Sign In: Link failed, trying regular sign in: $e');
-          _previousAnonymousUserId = null; // Clear since link failed
-          // If link fails (e.g., account already exists), sign in normally
+          // IMPORTANT: Keep the anonymous UID for migration even if link fails
+          // The user's anonymous data should be migrated to their existing account
           userCredential = await _auth.signInWithCredential(oauthCredential);
+          // Keep _previousAnonymousUserId so data can be migrated to existing account
+          _previousAnonymousUserId = anonymousUid;
+          debugPrint('Apple Sign In: Regular sign in successful, will migrate data from $anonymousUid');
         }
       } else {
         userCredential = await _auth.signInWithCredential(oauthCredential);
@@ -213,7 +223,8 @@ class AuthService {
       if (currentUser != null && currentUser.isAnonymous) {
         debugPrint('Email/Password Sign Up: Linking anonymous account...');
         // Store previous UID for migration
-        _previousAnonymousUserId = currentUser.uid;
+        final anonymousUid = currentUser.uid;
+        _previousAnonymousUserId = anonymousUid;
         debugPrint('Email/Password Sign Up: Stored previous anonymous UID: $_previousAnonymousUserId');
 
         try {
@@ -223,10 +234,14 @@ class AuthService {
           return result;
         } catch (e) {
           debugPrint('Email/Password Sign Up: Link failed, trying regular sign up: $e');
-          _previousAnonymousUserId = null; // Clear since link failed
-          // If link fails, sign out and create new account
+          // IMPORTANT: Keep the anonymous UID for migration even if link fails
+          // The user's anonymous data should be migrated to their new account
           await _auth.signOut();
-          return await _auth.createUserWithEmailAndPassword(email: email, password: password);
+          final result = await _auth.createUserWithEmailAndPassword(email: email, password: password);
+          // Keep _previousAnonymousUserId so data can be migrated to new account
+          _previousAnonymousUserId = anonymousUid;
+          debugPrint('Email/Password Sign Up: New account created, will migrate data from $anonymousUid');
+          return result;
         }
       }
 

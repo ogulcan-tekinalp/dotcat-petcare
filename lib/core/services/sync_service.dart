@@ -141,6 +141,15 @@ class SyncService {
     } catch (e) {
       debugPrint('SyncService: Sync error: $e');
       _setState(SyncState.error);
+
+      // Auto-recover from error state after 30 seconds
+      Future.delayed(const Duration(seconds: 30), () {
+        if (_currentState == SyncState.error) {
+          debugPrint('SyncService: Auto-recovering from error state');
+          _setState(SyncState.idle);
+        }
+      });
+
       return SyncResult(success: false, errorMessage: e.toString());
     }
   }
@@ -220,10 +229,10 @@ class SyncService {
   
   Future<int> _pushReminders() async {
     if (_userId == null) return 0;
-    
+
     final localReminders = await _db.getAllReminders();
     int count = 0;
-    
+
     for (final reminder in localReminders) {
       try {
         await _firestore
@@ -231,23 +240,23 @@ class SyncService {
             .doc(_userId)
             .collection('reminders')
             .doc(reminder.id)
-            .set(reminder.toMap(), SetOptions(merge: true));
+            .set(reminder.toFirestore(), SetOptions(merge: true));
         count++;
       } catch (e) {
         debugPrint('SyncService: Error pushing reminder ${reminder.id}: $e');
       }
     }
-    
+
     return count;
   }
   
   Future<int> _pushWeights() async {
     if (_userId == null) return 0;
-    
+
     // Get all cats first, then get weights for each
     final cats = await _db.getAllCats();
     int count = 0;
-    
+
     for (final cat in cats) {
       final weights = await _db.getWeightRecordsForCat(cat.id);
       for (final weight in weights) {
@@ -257,14 +266,14 @@ class SyncService {
               .doc(_userId)
               .collection('weights')
               .doc(weight.id)
-              .set(weight.toMap(), SetOptions(merge: true));
+              .set(weight.toFirestore(), SetOptions(merge: true));
           count++;
         } catch (e) {
           debugPrint('SyncService: Error pushing weight ${weight.id}: $e');
         }
       }
     }
-    
+
     return count;
   }
   
@@ -299,57 +308,84 @@ class SyncService {
   }
   
   // ============ PULL METHODS ============
-  
+
   Future<int> _pullCats() async {
     if (_userId == null) return 0;
-    
+
     final snapshot = await _firestore
         .collection('users')
         .doc(_userId)
         .collection('cats')
         .get();
-    
+
     int count = 0;
-    
+
+    // Get cloud cat IDs
+    final cloudCatIds = <String>{};
+
     for (final doc in snapshot.docs) {
       try {
         final cloudCat = Cat.fromMap(doc.data());
+        cloudCatIds.add(cloudCat.id);
         final localCat = await _db.getCatById(cloudCat.id);
-        
+
         if (localCat == null) {
           // Cloud'da var, local'de yok - ekle
           await _db.insertCat(cloudCat);
           count++;
         } else {
-          // Her ikisinde de var - newer wins (createdAt karşılaştır)
-          // Not: Cat'te updatedAt yok, bu yüzden her zaman cloud'u kabul ediyoruz
-          await _db.updateCat(cloudCat);
-          count++;
+          // Her ikisinde de var - newer wins (updatedAt karşılaştır)
+          if (cloudCat.updatedAt != null && localCat.updatedAt != null) {
+            if (cloudCat.updatedAt!.isAfter(localCat.updatedAt!)) {
+              await _db.updateCat(cloudCat);
+              count++;
+            }
+          } else {
+            await _db.updateCat(cloudCat);
+            count++;
+          }
         }
       } catch (e) {
         debugPrint('SyncService: Error pulling cat: $e');
       }
     }
-    
+
+    // Delete local cats that are not in cloud (deleted from another device)
+    try {
+      final localCats = await _db.getAllCats();
+      for (final localCat in localCats) {
+        if (!cloudCatIds.contains(localCat.id)) {
+          debugPrint('SyncService: Deleting local cat ${localCat.id} (deleted from cloud)');
+          await _db.deleteCat(localCat.id);
+        }
+      }
+    } catch (e) {
+      debugPrint('SyncService: Error cleaning up deleted cats: $e');
+    }
+
     return count;
   }
-  
+
   Future<int> _pullReminders() async {
     if (_userId == null) return 0;
-    
+
     final snapshot = await _firestore
         .collection('users')
         .doc(_userId)
         .collection('reminders')
         .get();
-    
+
     int count = 0;
-    
+
+    // Get cloud reminder IDs
+    final cloudReminderIds = <String>{};
+
     for (final doc in snapshot.docs) {
       try {
-        final cloudReminder = Reminder.fromMap(doc.data());
+        final cloudReminder = Reminder.fromFirestore(doc.data());
+        cloudReminderIds.add(cloudReminder.id);
         final localReminder = await _db.getReminderById(cloudReminder.id);
-        
+
         if (localReminder == null) {
           await _db.insertReminder(cloudReminder);
           count++;
@@ -361,32 +397,45 @@ class SyncService {
         debugPrint('SyncService: Error pulling reminder: $e');
       }
     }
-    
+
+    // Delete local reminders that are not in cloud (deleted from another device)
+    try {
+      final localReminders = await _db.getAllReminders();
+      for (final localReminder in localReminders) {
+        if (!cloudReminderIds.contains(localReminder.id)) {
+          debugPrint('SyncService: Deleting local reminder ${localReminder.id} (deleted from cloud)');
+          await _db.deleteReminder(localReminder.id);
+        }
+      }
+    } catch (e) {
+      debugPrint('SyncService: Error cleaning up deleted reminders: $e');
+    }
+
     return count;
   }
   
   Future<int> _pullWeights() async {
     if (_userId == null) return 0;
-    
+
     final snapshot = await _firestore
         .collection('users')
         .doc(_userId)
         .collection('weights')
         .get();
-    
+
     int count = 0;
     final db = await _db.database;
-    
+
     for (final doc in snapshot.docs) {
       try {
         final data = doc.data();
         final id = data['id'] as String;
-        
+
         // Check if exists locally
         final existing = await db.query('weight_records', where: 'id = ?', whereArgs: [id]);
-        
+
         if (existing.isEmpty) {
-          final weight = WeightRecord.fromMap(data);
+          final weight = WeightRecord.fromFirestore(data);
           await _db.insertWeightRecord(weight);
           count++;
         }
@@ -394,7 +443,7 @@ class SyncService {
         debugPrint('SyncService: Error pulling weight: $e');
       }
     }
-    
+
     return count;
   }
   

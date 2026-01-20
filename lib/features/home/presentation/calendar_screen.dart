@@ -9,6 +9,7 @@ import '../../../core/utils/date_helper.dart';
 import '../../../core/utils/localization.dart';
 import '../../../core/utils/page_transitions.dart';
 import '../../cats/providers/cats_provider.dart';
+import '../../dogs/providers/dogs_provider.dart';
 import '../../reminders/providers/reminders_provider.dart';
 import '../../reminders/providers/completions_provider.dart';
 import '../../reminders/presentation/add_reminder_screen.dart';
@@ -31,6 +32,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(remindersProvider.notifier).loadReminders();
       ref.read(catsProvider.notifier).loadCats();
+      ref.read(dogsProvider.notifier).loadDogs();
       ref.read(completionsProvider.notifier).refresh();
     });
   }
@@ -142,6 +144,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   @override
   Widget build(BuildContext context) {
     final cats = ref.watch(catsProvider);
+    final dogs = ref.watch(dogsProvider);
 
     final monthStart = DateTime(_focusedDay.year, _focusedDay.month, 1);
     final monthEnd = DateTime(_focusedDay.year, _focusedDay.month + 1, 0);
@@ -163,12 +166,19 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             icon: const Icon(Icons.add),
             tooltip: AppLocalizations.get('add_record'),
             onPressed: () {
-              final cat = cats.isNotEmpty ? cats.first : null;
+              // Prefer first pet (cat or dog)
+              String? firstPetId;
+              if (cats.isNotEmpty) {
+                firstPetId = cats.first.id;
+              } else if (dogs.isNotEmpty) {
+                firstPetId = dogs.first.id;
+              }
+
               Navigator.push(
                 context,
                 PageTransitions.fadeSlide(
                   page: AddReminderScreen(
-                    preselectedCatId: cat?.id,
+                    preselectedCatId: firstPetId,
                   ),
                 ),
               );

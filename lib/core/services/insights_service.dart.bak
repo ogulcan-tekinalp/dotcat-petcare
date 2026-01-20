@@ -202,7 +202,7 @@ class InsightsService {
         id: 'weight_underweight_${cat.id}',
         type: InsightType.warning,
         priority: InsightPriority.high,
-        title: AppLocalizations.get('insight_underweight_title').replaceAll('{petName}', cat.name),
+        title: AppLocalizations.get('insight_underweight_title').replaceAll('{catName}', cat.name),
         description: AppLocalizations.get('insight_underweight_description')
             .replaceAll('{weight}', currentWeight.toStringAsFixed(1))
             .replaceAll('{min}', idealRange.min.toStringAsFixed(1))
@@ -218,7 +218,7 @@ class InsightsService {
         id: 'weight_overweight_${cat.id}',
         type: InsightType.warning,
         priority: InsightPriority.high,
-        title: AppLocalizations.get('insight_overweight_title').replaceAll('{petName}', cat.name),
+        title: AppLocalizations.get('insight_overweight_title').replaceAll('{catName}', cat.name),
         description: AppLocalizations.get('insight_overweight_description')
             .replaceAll('{weight}', currentWeight.toStringAsFixed(1))
             .replaceAll('{min}', idealRange.min.toStringAsFixed(1))
@@ -241,7 +241,7 @@ class InsightsService {
           id: 'weight_decreasing_${cat.id}',
           type: InsightType.warning,
           priority: InsightPriority.medium,
-          title: AppLocalizations.get('insight_weight_decreasing_title').replaceAll('{petName}', cat.name),
+          title: AppLocalizations.get('insight_weight_decreasing_title').replaceAll('{catName}', cat.name),
           description: AppLocalizations.get('insight_weight_decreasing_description')
               .replaceAll('{change}', trendChange.abs().toStringAsFixed(1)),
           icon: Icons.trending_down_rounded,
@@ -255,7 +255,7 @@ class InsightsService {
           id: 'weight_increasing_${cat.id}',
           type: InsightType.info,
           priority: InsightPriority.low,
-          title: AppLocalizations.get('insight_weight_increasing_title').replaceAll('{petName}', cat.name),
+          title: AppLocalizations.get('insight_weight_increasing_title').replaceAll('{catName}', cat.name),
           description: description.replaceAll('{change}', trendChange.toStringAsFixed(1)),
           icon: Icons.trending_up_rounded,
           color: currentWeight > idealRange.max ? AppColors.warning : AppColors.info,
@@ -364,7 +364,7 @@ class InsightsService {
         id: 'vaccine_kitten_${cat.id}',
         type: InsightType.warning,
         priority: InsightPriority.high,
-        title: AppLocalizations.get('insight_vaccine_kitten_title').replaceAll('{petName}', cat.name),
+        title: AppLocalizations.get('insight_vaccine_kitten_title').replaceAll('{catName}', cat.name),
         description: AppLocalizations.get('insight_vaccine_kitten_description'),
         icon: Icons.vaccines_rounded,
         color: AppColors.error,
@@ -386,7 +386,7 @@ class InsightsService {
             priority: InsightPriority.medium,
             title: AppLocalizations.get('insight_vaccine_upcoming_title').replaceAll('{title}', vaccine.title),
             description: AppLocalizations.get('insight_vaccine_upcoming_description')
-                .replaceAll('{petName}', cat.name)
+                .replaceAll('{catName}', cat.name)
                 .replaceAll('{title}', vaccine.title)
                 .replaceAll('{days}', daysUntil.toString()),
             icon: Icons.event_rounded,
@@ -414,7 +414,7 @@ class InsightsService {
           id: 'senior_checkup_${cat.id}',
           type: InsightType.suggestion,
           priority: InsightPriority.medium,
-          title: AppLocalizations.get('insight_senior_checkup_title').replaceAll('{petName}', cat.name),
+          title: AppLocalizations.get('insight_senior_checkup_title').replaceAll('{catName}', cat.name),
           description: AppLocalizations.get('insight_senior_checkup_description'),
           icon: Icons.elderly_rounded,
           color: AppColors.info,
@@ -431,7 +431,7 @@ class InsightsService {
         id: 'kitten_milestone_2mo_${cat.id}',
         type: InsightType.info,
         priority: InsightPriority.low,
-        title: AppLocalizations.get('insight_kitten_2months_title').replaceAll('{petName}', cat.name),
+        title: AppLocalizations.get('insight_kitten_2months_title').replaceAll('{catName}', cat.name),
         description: AppLocalizations.get('insight_kitten_2months_description'),
         icon: Icons.cake_rounded,
         color: AppColors.success,
@@ -441,7 +441,7 @@ class InsightsService {
         id: 'kitten_milestone_6mo_${cat.id}',
         type: InsightType.info,
         priority: InsightPriority.low,
-        title: AppLocalizations.get('insight_kitten_6months_title').replaceAll('{petName}', cat.name),
+        title: AppLocalizations.get('insight_kitten_6months_title').replaceAll('{catName}', cat.name),
         description: AppLocalizations.get('insight_kitten_6months_description'),
         icon: Icons.cake_rounded,
         color: AppColors.success,
@@ -451,8 +451,8 @@ class InsightsService {
         id: 'cat_birthday_${cat.id}',
         type: InsightType.achievement,
         priority: InsightPriority.low,
-        title: AppLocalizations.get('insight_cat_1year_title').replaceAll('{petName}', cat.name),
-        description: AppLocalizations.get('insight_cat_1year_description').replaceAll('{petName}', cat.name),
+        title: AppLocalizations.get('insight_cat_1year_title').replaceAll('{catName}', cat.name),
+        description: AppLocalizations.get('insight_cat_1year_description').replaceAll('{catName}', cat.name),
         icon: Icons.celebration_rounded,
         color: AppColors.success,
       ));
@@ -498,7 +498,7 @@ class InsightsService {
             priority: InsightPriority.low,
             title: AppLocalizations.get('insight_streak_excellent_title'),
             description: AppLocalizations.get('insight_streak_excellent_description')
-                .replaceAll('{petName}', cat.name)
+                .replaceAll('{catName}', cat.name)
                 .replaceAll('{completion}', (rate * 100).toInt().toString()),
             icon: Icons.star_rounded,
             color: AppColors.success,
@@ -510,7 +510,7 @@ class InsightsService {
             priority: InsightPriority.medium,
             title: AppLocalizations.get('insight_streak_low_title'),
             description: AppLocalizations.get('insight_streak_low_description')
-                .replaceAll('{petName}', cat.name)
+                .replaceAll('{catName}', cat.name)
                 .replaceAll('{completion}', (rate * 100).toInt().toString()),
             icon: Icons.notification_important_rounded,
             color: AppColors.warning,
@@ -612,7 +612,7 @@ class InsightsService {
         id: 'kitten_play_${cat.id}',
         type: InsightType.suggestion,
         priority: InsightPriority.medium,
-        title: AppLocalizations.get('insight_kitten_play_title').replaceAll('{petName}', cat.name),
+        title: AppLocalizations.get('insight_kitten_play_title').replaceAll('{catName}', cat.name),
         description: AppLocalizations.get('insight_kitten_play_description'),
         icon: Icons.sports_esports_rounded,
         color: AppColors.primary,
@@ -629,7 +629,7 @@ class InsightsService {
         type: InsightType.info,
         priority: InsightPriority.medium,
         title: AppLocalizations.get('insight_kitten_socialization_title'),
-        description: AppLocalizations.get('insight_kitten_socialization_description').replaceAll('{petName}', cat.name),
+        description: AppLocalizations.get('insight_kitten_socialization_description').replaceAll('{catName}', cat.name),
         icon: Icons.group_rounded,
         color: AppColors.info,
       ));
@@ -648,7 +648,7 @@ class InsightsService {
         type: InsightType.suggestion,
         priority: InsightPriority.high,
         title: AppLocalizations.get('insight_kitten_food_title'),
-        description: AppLocalizations.get('insight_kitten_food_description').replaceAll('{petName}', cat.name),
+        description: AppLocalizations.get('insight_kitten_food_description').replaceAll('{catName}', cat.name),
         icon: Icons.restaurant_rounded,
         color: AppColors.food,
         actionLabel: AppLocalizations.get('insight_kitten_food_action'),
@@ -677,7 +677,7 @@ class InsightsService {
         id: 'adult_exercise_${cat.id}',
         type: InsightType.suggestion,
         priority: InsightPriority.low,
-        title: AppLocalizations.get('insight_adult_exercise_title').replaceAll('{petName}', cat.name),
+        title: AppLocalizations.get('insight_adult_exercise_title').replaceAll('{catName}', cat.name),
         description: AppLocalizations.get('insight_adult_exercise_description'),
         icon: Icons.fitness_center_rounded,
         color: AppColors.info,
@@ -699,7 +699,7 @@ class InsightsService {
         type: InsightType.info,
         priority: InsightPriority.low,
         title: AppLocalizations.get('insight_adult_water_title'),
-        description: AppLocalizations.get('insight_adult_water_description').replaceAll('{petName}', cat.name),
+        description: AppLocalizations.get('insight_adult_water_description').replaceAll('{catName}', cat.name),
         icon: Icons.water_drop_rounded,
         color: AppColors.info,
       ));
@@ -717,7 +717,7 @@ class InsightsService {
       id: 'senior_joint_health_${cat.id}',
       type: InsightType.info,
       priority: InsightPriority.medium,
-      title: AppLocalizations.get('insight_senior_joint_title').replaceAll('{petName}', cat.name),
+      title: AppLocalizations.get('insight_senior_joint_title').replaceAll('{catName}', cat.name),
       description: AppLocalizations.get('insight_senior_joint_description'),
       icon: Icons.accessibility_new_rounded,
       color: AppColors.warning,
@@ -734,7 +734,7 @@ class InsightsService {
         type: InsightType.warning,
         priority: InsightPriority.high,
         title: AppLocalizations.get('insight_senior_vet_title'),
-        description: AppLocalizations.get('insight_senior_vet_description').replaceAll('{petName}', cat.name),
+        description: AppLocalizations.get('insight_senior_vet_description').replaceAll('{catName}', cat.name),
         icon: Icons.medical_services_rounded,
         color: AppColors.vet,
         actionLabel: AppLocalizations.get('insight_senior_vet_action'),
@@ -756,7 +756,7 @@ class InsightsService {
         type: InsightType.suggestion,
         priority: InsightPriority.medium,
         title: AppLocalizations.get('insight_senior_food_title'),
-        description: AppLocalizations.get('insight_senior_food_description').replaceAll('{petName}', cat.name),
+        description: AppLocalizations.get('insight_senior_food_description').replaceAll('{catName}', cat.name),
         icon: Icons.restaurant_rounded,
         color: AppColors.food,
       ));
@@ -1004,7 +1004,7 @@ class InsightsService {
           type: InsightType.info,
           priority: InsightPriority.low,
           title: AppLocalizations.get('insight_water_intake_title'),
-          description: AppLocalizations.get('insight_water_intake_description').replaceAll('{petName}', cat.name),
+          description: AppLocalizations.get('insight_water_intake_description').replaceAll('{catName}', cat.name),
           icon: Icons.water_drop_rounded,
           color: const Color(0xFF2196F3),
         ));
@@ -1023,7 +1023,7 @@ class InsightsService {
           id: 'play_stimulation_${cat.id}',
           type: InsightType.suggestion,
           priority: InsightPriority.medium,
-          title: AppLocalizations.get('insight_play_activity_title').replaceAll('{petName}', cat.name),
+          title: AppLocalizations.get('insight_play_activity_title').replaceAll('{catName}', cat.name),
           description: AppLocalizations.get('insight_play_activity_description'),
           icon: Icons.sports_esports_rounded,
           color: const Color(0xFFFF9800),
@@ -1039,7 +1039,7 @@ class InsightsService {
         type: InsightType.info,
         priority: InsightPriority.low,
         title: AppLocalizations.get('insight_sunlight_vitamin_title'),
-        description: AppLocalizations.get('insight_sunlight_vitamin_description').replaceAll('{petName}', cat.name),
+        description: AppLocalizations.get('insight_sunlight_vitamin_description').replaceAll('{catName}', cat.name),
         icon: Icons.wb_sunny_rounded,
         color: const Color(0xFFFFC107),
       ));
@@ -1084,7 +1084,7 @@ class InsightsService {
         id: 'dog_no_weight_${dog.id}',
         type: InsightType.suggestion,
         priority: InsightPriority.medium,
-        title: '${dog.name} - ${AppLocalizations.get('insight_no_weight_title')}',
+        title: AppLocalizations.get('insight_no_weight_title'),
         description: AppLocalizations.get('insight_add_dog_weight'),
         icon: Icons.monitor_weight_outlined,
         color: AppColors.info,
@@ -1270,7 +1270,7 @@ class InsightsService {
         id: 'dog_no_vaccine_${dog.id}',
         type: InsightType.warning,
         priority: InsightPriority.high,
-        title: '${dog.name} - ${AppLocalizations.get('insight_no_vaccine_title')}',
+        title: AppLocalizations.get('insight_no_vaccine_title'),
         description: AppLocalizations.get('insight_dog_vaccine_reminder'),
         icon: Icons.vaccines_outlined,
         color: AppColors.error,

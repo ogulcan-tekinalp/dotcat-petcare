@@ -1,7 +1,3 @@
-import 'dart:ui' as ui;
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter/foundation.dart';
-
 enum AppLanguage { en, tr, de, es, ar }
 
 class AppLocalizations {
@@ -575,13 +571,6 @@ class AppLocalizations {
       AppLanguage.de: 'Bad',
       AppLanguage.es: 'Baño',
       AppLanguage.ar: 'الاستحمام',
-    },
-    'reminder_type_exercise': {
-      AppLanguage.en: 'Exercise',
-      AppLanguage.tr: 'Egzersiz',
-      AppLanguage.de: 'Übung',
-      AppLanguage.es: 'Ejercicio',
-      AppLanguage.ar: 'تمرين',
     },
 
     // ============ RECORDS ============
@@ -3073,11 +3062,11 @@ class AppLocalizations {
 
     // ============ INSIGHTS - WEIGHT ============
     'insight_underweight_title': {
-      AppLanguage.en: '{petName} appears underweight',
-      AppLanguage.tr: '{petName} düşük kilolu görünüyor',
-      AppLanguage.de: '{petName} scheint untergewichtig zu sein',
-      AppLanguage.es: '{petName} parece tener bajo peso',
-      AppLanguage.ar: '{petName} يبدو نحيفاً',
+      AppLanguage.en: '{catName} appears underweight',
+      AppLanguage.tr: '{catName} düşük kilolu görünüyor',
+      AppLanguage.de: '{catName} scheint untergewichtig zu sein',
+      AppLanguage.es: '{catName} parece tener bajo peso',
+      AppLanguage.ar: '{catName} يبدو نحيفاً',
     },
     'insight_underweight_description': {
       AppLanguage.en: 'Current weight: {weight} kg. Ideal range: {minWeight}-{maxWeight} kg. We recommend consulting your veterinarian.',
@@ -3094,11 +3083,11 @@ class AppLocalizations {
       AppLanguage.ar: 'إضافة موعد بيطري',
     },
     'insight_overweight_title': {
-      AppLanguage.en: '{petName} appears overweight',
-      AppLanguage.tr: '{petName} fazla kilolu görünüyor',
-      AppLanguage.de: '{petName} scheint übergewichtig zu sein',
-      AppLanguage.es: '{petName} parece tener sobrepeso',
-      AppLanguage.ar: '{petName} يبدو بديناً',
+      AppLanguage.en: '{catName} appears overweight',
+      AppLanguage.tr: '{catName} fazla kilolu görünüyor',
+      AppLanguage.de: '{catName} scheint übergewichtig zu sein',
+      AppLanguage.es: '{catName} parece tener sobrepeso',
+      AppLanguage.ar: '{catName} يبدو بديناً',
     },
     'insight_overweight_description': {
       AppLanguage.en: 'Current weight: {weight} kg. Ideal range: {minWeight}-{maxWeight} kg. Consult your vet for a diet plan.',
@@ -3108,11 +3097,11 @@ class AppLocalizations {
       AppLanguage.ar: 'الوزن الحالي: {weight} كجم. النطاق المثالي: {minWeight}-{maxWeight} كجم. استشر الطبيب البيطري لخطة النظام الغذائي.',
     },
     'insight_weight_decreasing_title': {
-      AppLanguage.en: '{petName} is losing weight',
-      AppLanguage.tr: '{petName} kilo kaybediyor',
-      AppLanguage.de: '{petName} verliert an Gewicht',
-      AppLanguage.es: '{petName} está perdiendo peso',
-      AppLanguage.ar: '{petName} يفقد الوزن',
+      AppLanguage.en: '{catName} is losing weight',
+      AppLanguage.tr: '{catName} kilo kaybediyor',
+      AppLanguage.de: '{catName} verliert an Gewicht',
+      AppLanguage.es: '{catName} está perdiendo peso',
+      AppLanguage.ar: '{catName} يفقد الوزن',
     },
     'insight_weight_decreasing_description': {
       AppLanguage.en: 'Weight loss of {change} kg detected recently. Sudden weight loss may indicate health issues.',
@@ -3122,11 +3111,11 @@ class AppLocalizations {
       AppLanguage.ar: 'تم اكتشاف فقدان وزن بمقدار {change} كجم مؤخراً. قد يشير فقدان الوزن المفاجئ إلى مشاكل صحية.',
     },
     'insight_weight_increasing_title': {
-      AppLanguage.en: '{petName} is gaining weight',
-      AppLanguage.tr: '{petName} kilo alıyor',
-      AppLanguage.de: '{petName} nimmt zu',
-      AppLanguage.es: '{petName} está ganando peso',
-      AppLanguage.ar: '{petName} يكتسب الوزن',
+      AppLanguage.en: '{catName} is gaining weight',
+      AppLanguage.tr: '{catName} kilo alıyor',
+      AppLanguage.de: '{catName} nimmt zu',
+      AppLanguage.es: '{catName} está ganando peso',
+      AppLanguage.ar: '{catName} يكتسب الوزن',
     },
     'insight_weight_increasing_description_normal': {
       AppLanguage.en: 'Weight gain of {change} kg recently. Within normal range.',
@@ -3145,11 +3134,11 @@ class AppLocalizations {
 
     // ============ INSIGHTS - VACCINES ============
     'insight_vaccine_kitten_title': {
-      AppLanguage.en: 'Create vaccination schedule for {petName}',
-      AppLanguage.tr: '{petName} için aşı takvimi oluşturun',
-      AppLanguage.de: 'Impfplan für {petName} erstellen',
-      AppLanguage.es: 'Crear calendario de vacunación para {petName}',
-      AppLanguage.ar: 'إنشاء جدول التطعيم لـ {petName}',
+      AppLanguage.en: 'Create vaccination schedule for {catName}',
+      AppLanguage.tr: '{catName} için aşı takvimi oluşturun',
+      AppLanguage.de: 'Impfplan für {catName} erstellen',
+      AppLanguage.es: 'Crear calendario de vacunación para {catName}',
+      AppLanguage.ar: 'إنشاء جدول التطعيم لـ {catName}',
     },
     'insight_vaccine_kitten_description': {
       AppLanguage.en: 'Kittens should be vaccinated starting at 6-8 weeks. FVRCP combination vaccine is critical.',
@@ -3173,20 +3162,20 @@ class AppLocalizations {
       AppLanguage.ar: '{vaccineName} قريب',
     },
     'insight_vaccine_upcoming_description': {
-      AppLanguage.en: '{vaccineName} for {petName} in {days} days.',
-      AppLanguage.tr: '{petName} için {vaccineName} {days} gün sonra.',
-      AppLanguage.de: '{vaccineName} für {petName} in {days} Tagen.',
-      AppLanguage.es: '{vaccineName} para {petName} en {days} días.',
-      AppLanguage.ar: '{vaccineName} لـ {petName} في {days} أيام.',
+      AppLanguage.en: '{vaccineName} for {catName} in {days} days.',
+      AppLanguage.tr: '{catName} için {vaccineName} {days} gün sonra.',
+      AppLanguage.de: '{vaccineName} für {catName} in {days} Tagen.',
+      AppLanguage.es: '{vaccineName} para {catName} en {days} días.',
+      AppLanguage.ar: '{vaccineName} لـ {catName} في {days} أيام.',
     },
 
     // ============ INSIGHTS - AGE MILESTONES ============
     'insight_senior_checkup_title': {
-      AppLanguage.en: '{petName} senior cat care',
-      AppLanguage.tr: '{petName} yaşlı kedi bakımı',
-      AppLanguage.de: '{petName} Seniorenkatzen-Pflege',
-      AppLanguage.es: 'Cuidado de gato mayor {petName}',
-      AppLanguage.ar: 'رعاية القط الكبير {petName}',
+      AppLanguage.en: '{catName} senior cat care',
+      AppLanguage.tr: '{catName} yaşlı kedi bakımı',
+      AppLanguage.de: '{catName} Seniorenkatzen-Pflege',
+      AppLanguage.es: 'Cuidado de gato mayor {catName}',
+      AppLanguage.ar: 'رعاية القط الكبير {catName}',
     },
     'insight_senior_checkup_description': {
       AppLanguage.en: 'Cats 7+ years old should have vet checkups twice a year.',
@@ -3203,11 +3192,11 @@ class AppLocalizations {
       AppLanguage.ar: 'إضافة فحص',
     },
     'insight_kitten_2months_title': {
-      AppLanguage.en: '{petName} is 2 months old! 🎉',
-      AppLanguage.tr: '{petName} 2 aylık! 🎉',
-      AppLanguage.de: '{petName} ist 2 Monate alt! 🎉',
-      AppLanguage.es: '¡{petName} tiene 2 meses! 🎉',
-      AppLanguage.ar: '{petName} عمره شهرين! 🎉',
+      AppLanguage.en: '{catName} is 2 months old! 🎉',
+      AppLanguage.tr: '{catName} 2 aylık! 🎉',
+      AppLanguage.de: '{catName} ist 2 Monate alt! 🎉',
+      AppLanguage.es: '¡{catName} tiene 2 meses! 🎉',
+      AppLanguage.ar: '{catName} عمره شهرين! 🎉',
     },
     'insight_kitten_2months_description': {
       AppLanguage.en: 'Ideal time for first vaccinations. Socialization period begins.',
@@ -3217,11 +3206,11 @@ class AppLocalizations {
       AppLanguage.ar: 'الوقت المثالي للتطعيمات الأولى. تبدأ فترة التنشئة الاجتماعية.',
     },
     'insight_kitten_6months_title': {
-      AppLanguage.en: '{petName} is 6 months old! 🎉',
-      AppLanguage.tr: '{petName} 6 aylık! 🎉',
-      AppLanguage.de: '{petName} ist 6 Monate alt! 🎉',
-      AppLanguage.es: '¡{petName} tiene 6 meses! 🎉',
-      AppLanguage.ar: '{petName} عمره 6 أشهر! 🎉',
+      AppLanguage.en: '{catName} is 6 months old! 🎉',
+      AppLanguage.tr: '{catName} 6 aylık! 🎉',
+      AppLanguage.de: '{catName} ist 6 Monate alt! 🎉',
+      AppLanguage.es: '¡{catName} tiene 6 meses! 🎉',
+      AppLanguage.ar: '{catName} عمره 6 أشهر! 🎉',
     },
     'insight_kitten_6months_description': {
       AppLanguage.en: 'Appropriate age for spaying/neutering. Consult with your vet.',
@@ -3231,18 +3220,18 @@ class AppLocalizations {
       AppLanguage.ar: 'العمر المناسب للتعقيم. استشر الطبيب البيطري.',
     },
     'insight_cat_1year_title': {
-      AppLanguage.en: '{petName} is 1 year old! 🎂',
-      AppLanguage.tr: '{petName} 1 yaşında! 🎂',
-      AppLanguage.de: '{petName} ist 1 Jahr alt! 🎂',
-      AppLanguage.es: '¡{petName} tiene 1 año! 🎂',
-      AppLanguage.ar: '{petName} عمره سنة واحدة! 🎂',
+      AppLanguage.en: '{catName} is 1 year old! 🎂',
+      AppLanguage.tr: '{catName} 1 yaşında! 🎂',
+      AppLanguage.de: '{catName} ist 1 Jahr alt! 🎂',
+      AppLanguage.es: '¡{catName} tiene 1 año! 🎂',
+      AppLanguage.ar: '{catName} عمره سنة واحدة! 🎂',
     },
     'insight_cat_1year_description': {
-      AppLanguage.en: '{petName} is now an adult cat. Time to transition to adult food.',
-      AppLanguage.tr: '{petName} artık yetişkin bir kedi. Yetişkin mama geçişi zamanı.',
-      AppLanguage.de: '{petName} ist jetzt eine erwachsene Katze. Zeit für den Übergang zu Erwachsenenfutter.',
-      AppLanguage.es: '{petName} ahora es un gato adulto. Hora de cambiar a comida para adultos.',
-      AppLanguage.ar: '{petName} الآن قط بالغ. حان الوقت للانتقال إلى طعام البالغين.',
+      AppLanguage.en: '{catName} is now an adult cat. Time to transition to adult food.',
+      AppLanguage.tr: '{catName} artık yetişkin bir kedi. Yetişkin mama geçişi zamanı.',
+      AppLanguage.de: '{catName} ist jetzt eine erwachsene Katze. Zeit für den Übergang zu Erwachsenenfutter.',
+      AppLanguage.es: '{catName} ahora es un gato adulto. Hora de cambiar a comida para adultos.',
+      AppLanguage.ar: '{catName} الآن قط بالغ. حان الوقت للانتقال إلى طعام البالغين.',
     },
 
     // ============ INSIGHTS - ACTIVITY ============
@@ -3254,11 +3243,11 @@ class AppLocalizations {
       AppLanguage.ar: 'رعاية ممتازة! 🌟',
     },
     'insight_streak_excellent_description': {
-      AppLanguage.en: '{completion}% completion rate for {petName} in the last 7 days. Perfect!',
-      AppLanguage.tr: '{petName} için son 7 günde %{completion} tamamlama oranı. Mükemmel!',
-      AppLanguage.de: '{completion}% Abschlussrate für {petName} in den letzten 7 Tagen. Perfekt!',
-      AppLanguage.es: '{completion}% de tasa de finalización para {petName} en los últimos 7 días. ¡Perfecto!',
-      AppLanguage.ar: 'معدل إكمال {completion}% لـ {petName} في آخر 7 أيام. مثالي!',
+      AppLanguage.en: '{completion}% completion rate for {catName} in the last 7 days. Perfect!',
+      AppLanguage.tr: '{catName} için son 7 günde %{completion} tamamlama oranı. Mükemmel!',
+      AppLanguage.de: '{completion}% Abschlussrate für {catName} in den letzten 7 Tagen. Perfekt!',
+      AppLanguage.es: '{completion}% de tasa de finalización para {catName} en los últimos 7 días. ¡Perfecto!',
+      AppLanguage.ar: 'معدل إكمال {completion}% لـ {catName} في آخر 7 أيام. مثالي!',
     },
     'insight_streak_low_title': {
       AppLanguage.en: 'Check your reminders',
@@ -3268,11 +3257,11 @@ class AppLocalizations {
       AppLanguage.ar: 'تحقق من تذكيراتك',
     },
     'insight_streak_low_description': {
-      AppLanguage.en: '{completion}% completion rate for {petName} in the last 7 days. Enable notifications.',
-      AppLanguage.tr: '{petName} için son 7 günde %{completion} tamamlama oranı. Bildirimleri aktif edin.',
-      AppLanguage.de: '{completion}% Abschlussrate für {petName} in den letzten 7 Tagen. Aktivieren Sie Benachrichtigungen.',
-      AppLanguage.es: '{completion}% de tasa de finalización para {petName} en los últimos 7 días. Active las notificaciones.',
-      AppLanguage.ar: 'معدل إكمال {completion}% لـ {petName} في آخر 7 أيام. تفعيل الإشعارات.',
+      AppLanguage.en: '{completion}% completion rate for {catName} in the last 7 days. Enable notifications.',
+      AppLanguage.tr: '{catName} için son 7 günde %{completion} tamamlama oranı. Bildirimleri aktif edin.',
+      AppLanguage.de: '{completion}% Abschlussrate für {catName} in den letzten 7 Tagen. Aktivieren Sie Benachrichtigungen.',
+      AppLanguage.es: '{completion}% de tasa de finalización para {catName} en los últimos 7 días. Active las notificaciones.',
+      AppLanguage.ar: 'معدل إكمال {completion}% لـ {catName} في آخر 7 أيام. تفعيل الإشعارات.',
     },
 
     // ============ INSIGHTS - GENERAL ============
@@ -3321,11 +3310,11 @@ class AppLocalizations {
 
     // ============ INSIGHTS - KITTEN SPECIFIC ============
     'insight_kitten_play_title': {
-      AppLanguage.en: 'Playtime for {petName}',
-      AppLanguage.tr: '{petName} için oyun zamanı',
-      AppLanguage.de: 'Spielzeit für {petName}',
-      AppLanguage.es: 'Tiempo de juego para {petName}',
-      AppLanguage.ar: 'وقت اللعب لـ {petName}',
+      AppLanguage.en: 'Playtime for {catName}',
+      AppLanguage.tr: '{catName} için oyun zamanı',
+      AppLanguage.de: 'Spielzeit für {catName}',
+      AppLanguage.es: 'Tiempo de juego para {catName}',
+      AppLanguage.ar: 'وقت اللعب لـ {catName}',
     },
     'insight_kitten_play_description': {
       AppLanguage.en: 'Kittens should engage in active play at least 2-3 times daily. This supports both physical and mental development.',
@@ -3349,11 +3338,11 @@ class AppLocalizations {
       AppLanguage.ar: 'فترة التنشئة الاجتماعية',
     },
     'insight_kitten_socialization_description': {
-      AppLanguage.en: '{petName} is in the critical socialization period (2-7 months). Exposure to different people, sounds, and environments is important.',
-      AppLanguage.tr: '{petName} kritik sosyalleşme döneminde (2-7 ay). Farklı insanlar, sesler ve ortamlarla tanışması önemli.',
-      AppLanguage.de: '{petName} befindet sich in der kritischen Sozialisierungsphase (2-7 Monate). Der Kontakt mit verschiedenen Menschen, Geräuschen und Umgebungen ist wichtig.',
-      AppLanguage.es: '{petName} está en el período crítico de socialización (2-7 meses). La exposición a diferentes personas, sonidos y entornos es importante.',
-      AppLanguage.ar: '{petName} في فترة التنشئة الاجتماعية الحرجة (2-7 أشهر). التعرض لأشخاص وأصوات وبيئات مختلفة مهم.',
+      AppLanguage.en: '{catName} is in the critical socialization period (2-7 months). Exposure to different people, sounds, and environments is important.',
+      AppLanguage.tr: '{catName} kritik sosyalleşme döneminde (2-7 ay). Farklı insanlar, sesler ve ortamlarla tanışması önemli.',
+      AppLanguage.de: '{catName} befindet sich in der kritischen Sozialisierungsphase (2-7 Monate). Der Kontakt mit verschiedenen Menschen, Geräuschen und Umgebungen ist wichtig.',
+      AppLanguage.es: '{catName} está en el período crítico de socialización (2-7 meses). La exposición a diferentes personas, sonidos y entornos es importante.',
+      AppLanguage.ar: '{catName} في فترة التنشئة الاجتماعية الحرجة (2-7 أشهر). التعرض لأشخاص وأصوات وبيئات مختلفة مهم.',
     },
     'insight_kitten_food_title': {
       AppLanguage.en: 'Kittens need frequent feeding',
@@ -3363,11 +3352,11 @@ class AppLocalizations {
       AppLanguage.ar: 'تحتاج القطط الصغيرة إلى تغذية متكررة',
     },
     'insight_kitten_food_description': {
-      AppLanguage.en: '{petName} should be fed 3-4 times daily with kitten-specific food. Adult food is not yet appropriate.',
-      AppLanguage.tr: '{petName} günde 3-4 öğün yavru kedilere özel mama ile beslenmelidir. Yetişkin mama henüz uygun değil.',
-      AppLanguage.de: '{petName} sollte 3-4 Mal täglich mit kätzchenspezifischem Futter gefüttert werden. Erwachsenenfutter ist noch nicht geeignet.',
-      AppLanguage.es: '{petName} debe ser alimentado 3-4 veces al día con comida específica para gatitos. La comida para adultos aún no es apropiada.',
-      AppLanguage.ar: 'يجب إطعام {petName} 3-4 مرات يومياً بطعام خاص بالقطط الصغيرة. طعام البالغين ليس مناسباً بعد.',
+      AppLanguage.en: '{catName} should be fed 3-4 times daily with kitten-specific food. Adult food is not yet appropriate.',
+      AppLanguage.tr: '{catName} günde 3-4 öğün yavru kedilere özel mama ile beslenmelidir. Yetişkin mama henüz uygun değil.',
+      AppLanguage.de: '{catName} sollte 3-4 Mal täglich mit kätzchenspezifischem Futter gefüttert werden. Erwachsenenfutter ist noch nicht geeignet.',
+      AppLanguage.es: '{catName} debe ser alimentado 3-4 veces al día con comida específica para gatitos. La comida para adultos aún no es apropiada.',
+      AppLanguage.ar: 'يجب إطعام {catName} 3-4 مرات يومياً بطعام خاص بالقطط الصغيرة. طعام البالغين ليس مناسباً بعد.',
     },
     'insight_kitten_food_action': {
       AppLanguage.en: 'Add Feeding Reminder',
@@ -3379,11 +3368,11 @@ class AppLocalizations {
 
     // ============ INSIGHTS - ADULT SPECIFIC ============
     'insight_adult_exercise_title': {
-      AppLanguage.en: 'Exercise is important for {petName}',
-      AppLanguage.tr: '{petName} için egzersiz önemli',
-      AppLanguage.de: 'Bewegung ist wichtig für {petName}',
-      AppLanguage.es: 'El ejercicio es importante para {petName}',
-      AppLanguage.ar: 'التمرين مهم لـ {petName}',
+      AppLanguage.en: 'Exercise is important for {catName}',
+      AppLanguage.tr: '{catName} için egzersiz önemli',
+      AppLanguage.de: 'Bewegung ist wichtig für {catName}',
+      AppLanguage.es: 'El ejercicio es importante para {catName}',
+      AppLanguage.ar: 'التمرين مهم لـ {catName}',
     },
     'insight_adult_exercise_description': {
       AppLanguage.en: 'Adult cats stay in shape and prevent weight problems with at least 15-20 minutes of active play daily.',
@@ -3400,20 +3389,20 @@ class AppLocalizations {
       AppLanguage.ar: 'تتبع استهلاك الماء',
     },
     'insight_adult_water_description': {
-      AppLanguage.en: 'Track {petName}\'s daily water intake. Adult cats should drink 50-60 ml per kg of body weight.',
-      AppLanguage.tr: '{petName} günlük su tüketimini takip edin. Yetişkin kediler kilo başına 50-60 ml su içmelidir.',
-      AppLanguage.de: 'Verfolgen Sie die tägliche Wasseraufnahme von {petName}. Erwachsene Katzen sollten 50-60 ml pro kg Körpergewicht trinken.',
-      AppLanguage.es: 'Rastree la ingesta diaria de agua de {petName}. Los gatos adultos deben beber 50-60 ml por kg de peso corporal.',
-      AppLanguage.ar: 'تتبع استهلاك الماء اليومي لـ {petName}. يجب أن تشرب القطط البالغة 50-60 مل لكل كجم من وزن الجسم.',
+      AppLanguage.en: 'Track {catName}\'s daily water intake. Adult cats should drink 50-60 ml per kg of body weight.',
+      AppLanguage.tr: '{catName} günlük su tüketimini takip edin. Yetişkin kediler kilo başına 50-60 ml su içmelidir.',
+      AppLanguage.de: 'Verfolgen Sie die tägliche Wasseraufnahme von {catName}. Erwachsene Katzen sollten 50-60 ml pro kg Körpergewicht trinken.',
+      AppLanguage.es: 'Rastree la ingesta diaria de agua de {catName}. Los gatos adultos deben beber 50-60 ml por kg de peso corporal.',
+      AppLanguage.ar: 'تتبع استهلاك الماء اليومي لـ {catName}. يجب أن تشرب القطط البالغة 50-60 مل لكل كجم من وزن الجسم.',
     },
 
     // ============ INSIGHTS - SENIOR SPECIFIC ============
     'insight_senior_joint_title': {
-      AppLanguage.en: 'Joint health for {petName}',
-      AppLanguage.tr: '{petName} için eklem sağlığı',
-      AppLanguage.de: 'Gelenkgesundheit für {petName}',
-      AppLanguage.es: 'Salud articular para {petName}',
-      AppLanguage.ar: 'صحة المفاصل لـ {petName}',
+      AppLanguage.en: 'Joint health for {catName}',
+      AppLanguage.tr: '{catName} için eklem sağlığı',
+      AppLanguage.de: 'Gelenkgesundheit für {catName}',
+      AppLanguage.es: 'Salud articular para {catName}',
+      AppLanguage.ar: 'صحة المفاصل لـ {catName}',
     },
     'insight_senior_joint_description': {
       AppLanguage.en: 'Joint problems are common in senior cats. Watch for signs like difficulty climbing and slower movements.',
@@ -3430,11 +3419,11 @@ class AppLocalizations {
       AppLanguage.ar: 'فحص صحة القط الكبير',
     },
     'insight_senior_vet_description': {
-      AppLanguage.en: '{petName} is 7+ years old. At least 2 vet checkups per year are recommended. Kidney, heart, and other age-related issues can be detected early.',
-      AppLanguage.tr: '{petName} 7+ yaşında. Yılda en az 2 kez veteriner kontrolü yapılması önerilir. Böbrek, kalp ve diğer yaşa bağlı sorunlar erken tespit edilebilir.',
-      AppLanguage.de: '{petName} ist 7+ Jahre alt. Mindestens 2 tierärztliche Untersuchungen pro Jahr werden empfohlen. Nieren-, Herz- und andere altersbedingte Probleme können früh erkannt werden.',
-      AppLanguage.es: '{petName} tiene 7+ años. Se recomiendan al menos 2 chequeos veterinarios por año. Los problemas renales, cardíacos y otros relacionados con la edad se pueden detectar temprano.',
-      AppLanguage.ar: '{petName} عمره 7+ سنوات. يوصى بإجراء فحصين بيطريين على الأقل سنوياً. يمكن اكتشاف مشاكل الكلى والقلب وغيرها من المشاكل المرتبطة بالعمر مبكراً.',
+      AppLanguage.en: '{catName} is 7+ years old. At least 2 vet checkups per year are recommended. Kidney, heart, and other age-related issues can be detected early.',
+      AppLanguage.tr: '{catName} 7+ yaşında. Yılda en az 2 kez veteriner kontrolü yapılması önerilir. Böbrek, kalp ve diğer yaşa bağlı sorunlar erken tespit edilebilir.',
+      AppLanguage.de: '{catName} ist 7+ Jahre alt. Mindestens 2 tierärztliche Untersuchungen pro Jahr werden empfohlen. Nieren-, Herz- und andere altersbedingte Probleme können früh erkannt werden.',
+      AppLanguage.es: '{catName} tiene 7+ años. Se recomiendan al menos 2 chequeos veterinarios por año. Los problemas renales, cardíacos y otros relacionados con la edad se pueden detectar temprano.',
+      AppLanguage.ar: '{catName} عمره 7+ سنوات. يوصى بإجراء فحصين بيطريين على الأقل سنوياً. يمكن اكتشاف مشاكل الكلى والقلب وغيرها من المشاكل المرتبطة بالعمر مبكراً.',
     },
     'insight_senior_vet_action': {
       AppLanguage.en: 'Add Vet Checkup',
@@ -3451,11 +3440,11 @@ class AppLocalizations {
       AppLanguage.ar: 'طعام القطط الكبيرة',
     },
     'insight_senior_food_description': {
-      AppLanguage.en: 'Consider using senior-specific food for {petName}. These foods are easier to digest and support joint health.',
-      AppLanguage.tr: '{petName} için yaşlı kedilere özel mama kullanmayı düşünün. Bu mamalar daha kolay sindirilebilir ve eklem sağlığını destekler.',
-      AppLanguage.de: 'Erwägen Sie seniorenspezifisches Futter für {petName}. Diese Futtersorten sind leichter verdaulich und unterstützen die Gelenkgesundheit.',
-      AppLanguage.es: 'Considere usar comida específica para mayores para {petName}. Estos alimentos son más fáciles de digerir y apoyan la salud articular.',
-      AppLanguage.ar: 'فكر في استخدام طعام خاص بالقطط الكبيرة لـ {petName}. هذه الأطعمة أسهل في الهضم وتدعم صحة المفاصل.',
+      AppLanguage.en: 'Consider using senior-specific food for {catName}. These foods are easier to digest and support joint health.',
+      AppLanguage.tr: '{catName} için yaşlı kedilere özel mama kullanmayı düşünün. Bu mamalar daha kolay sindirilebilir ve eklem sağlığını destekler.',
+      AppLanguage.de: 'Erwägen Sie seniorenspezifisches Futter für {catName}. Diese Futtersorten sind leichter verdaulich und unterstützen die Gelenkgesundheit.',
+      AppLanguage.es: 'Considere usar comida específica para mayores para {catName}. Estos alimentos son más fáciles de digerir y apoyan la salud articular.',
+      AppLanguage.ar: 'فكر في استخدام طعام خاص بالقطط الكبيرة لـ {catName}. هذه الأطعمة أسهل في الهضم وتدعم صحة المفاصل.',
     },
     'insight_senior_behavior_title': {
       AppLanguage.en: 'Behavior tracking',
@@ -3616,18 +3605,18 @@ class AppLocalizations {
       AppLanguage.ar: 'استهلاك الماء مهم',
     },
     'insight_water_intake_description': {
-      AppLanguage.en: '{petName} should drink sufficient water daily. You can increase water intake by using multiple water bowls and changing the water frequently.',
-      AppLanguage.tr: '{petName} günlük yeterli su içmeli. Birden fazla su kabı kullanarak ve suyunu sık değiştirerek su tüketimini artırabilirsiniz.',
-      AppLanguage.de: '{petName} sollte täglich ausreichend Wasser trinken. Sie können die Wasseraufnahme erhöhen, indem Sie mehrere Wasserschüsseln verwenden und das Wasser häufig wechseln.',
-      AppLanguage.es: '{petName} debe beber suficiente agua diariamente. Puede aumentar la ingesta de agua usando múltiples tazones de agua y cambiando el agua frecuentemente.',
-      AppLanguage.ar: 'يجب أن يشرب {petName} ما يكفي من الماء يومياً. يمكنك زيادة استهلاك الماء باستخدام أوعية ماء متعددة وتغيير الماء بشكل متكرر.',
+      AppLanguage.en: '{catName} should drink sufficient water daily. You can increase water intake by using multiple water bowls and changing the water frequently.',
+      AppLanguage.tr: '{catName} günlük yeterli su içmeli. Birden fazla su kabı kullanarak ve suyunu sık değiştirerek su tüketimini artırabilirsiniz.',
+      AppLanguage.de: '{catName} sollte täglich ausreichend Wasser trinken. Sie können die Wasseraufnahme erhöhen, indem Sie mehrere Wasserschüsseln verwenden und das Wasser häufig wechseln.',
+      AppLanguage.es: '{catName} debe beber suficiente agua diariamente. Puede aumentar la ingesta de agua usando múltiples tazones de agua y cambiando el agua frecuentemente.',
+      AppLanguage.ar: 'يجب أن يشرب {catName} ما يكفي من الماء يومياً. يمكنك زيادة استهلاك الماء باستخدام أوعية ماء متعددة وتغيير الماء بشكل متكرر.',
     },
     'insight_play_activity_title': {
-      AppLanguage.en: 'Daily activity for {petName}',
-      AppLanguage.tr: '{petName} için günlük aktivite',
-      AppLanguage.de: 'Tägliche Aktivität für {petName}',
-      AppLanguage.es: 'Actividad diaria para {petName}',
-      AppLanguage.ar: 'النشاط اليومي لـ {petName}',
+      AppLanguage.en: 'Daily activity for {catName}',
+      AppLanguage.tr: '{catName} için günlük aktivite',
+      AppLanguage.de: 'Tägliche Aktivität für {catName}',
+      AppLanguage.es: 'Actividad diaria para {catName}',
+      AppLanguage.ar: 'النشاط اليومي لـ {catName}',
     },
     'insight_play_activity_description': {
       AppLanguage.en: 'Cats should play actively for at least 15-20 minutes daily. This is important for physical health and mental stimulation.',
@@ -3651,11 +3640,11 @@ class AppLocalizations {
       AppLanguage.ar: 'فوائد ضوء الشمس',
     },
     'insight_sunlight_vitamin_description': {
-      AppLanguage.en: 'Create a safe area by the window where {petName} can get sunlight. Sunlight is beneficial for mental health.',
-      AppLanguage.tr: '{petName} için pencere kenarında güneş ışığı alacağı güvenli bir alan oluşturun. Güneş ışığı ruh sağlığı için faydalıdır.',
-      AppLanguage.de: 'Schaffen Sie einen sicheren Bereich am Fenster, wo {petName} Sonnenlicht bekommen kann. Sonnenlicht ist vorteilhaft für die psychische Gesundheit.',
-      AppLanguage.es: 'Cree un área segura junto a la ventana donde {petName} pueda recibir luz solar. La luz solar es beneficiosa para la salud mental.',
-      AppLanguage.ar: 'أنشئ منطقة آمنة بجوار النافذة حيث يمكن لـ {petName} الحصول على ضوء الشمس. ضوء الشمس مفيد للصحة العقلية.',
+      AppLanguage.en: 'Create a safe area by the window where {catName} can get sunlight. Sunlight is beneficial for mental health.',
+      AppLanguage.tr: '{catName} için pencere kenarında güneş ışığı alacağı güvenli bir alan oluşturun. Güneş ışığı ruh sağlığı için faydalıdır.',
+      AppLanguage.de: 'Schaffen Sie einen sicheren Bereich am Fenster, wo {catName} Sonnenlicht bekommen kann. Sonnenlicht ist vorteilhaft für die psychische Gesundheit.',
+      AppLanguage.es: 'Cree un área segura junto a la ventana donde {catName} pueda recibir luz solar. La luz solar es beneficiosa para la salud mental.',
+      AppLanguage.ar: 'أنشئ منطقة آمنة بجوار النافذة حيث يمكن لـ {catName} الحصول على ضوء الشمس. ضوء الشمس مفيد للصحة العقلية.',
     },
     'insight_stress_management_title': {
       AppLanguage.en: 'Stress management in multi-cat homes',
@@ -3852,27 +3841,6 @@ class AppLocalizations {
       AppLanguage.es: 'Añadir mascota',
       AppLanguage.ar: 'إضافة حيوان أليف',
     },
-    'insight_no_weight_title': {
-      AppLanguage.en: 'No Weight Records',
-      AppLanguage.tr: 'Kilo Kaydı Yok',
-      AppLanguage.de: 'Keine Gewichtsaufzeichnungen',
-      AppLanguage.es: 'Sin registros de peso',
-      AppLanguage.ar: 'لا توجد سجلات وزن',
-    },
-    'insight_add_weight_action': {
-      AppLanguage.en: 'Add Weight',
-      AppLanguage.tr: 'Kilo Ekle',
-      AppLanguage.de: 'Gewicht hinzufügen',
-      AppLanguage.es: 'Añadir peso',
-      AppLanguage.ar: 'إضافة وزن',
-    },
-    'insight_no_vaccine_title': {
-      AppLanguage.en: 'No Vaccine Reminders',
-      AppLanguage.tr: 'Aşı Hatırlatıcısı Yok',
-      AppLanguage.de: 'Keine Impferinnerungen',
-      AppLanguage.es: 'Sin recordatorios de vacunas',
-      AppLanguage.ar: 'لا توجد تذكيرات للقاحات',
-    },
 
     // ============ NOTIFICATIONS - INSIGHTS ============
     'notification_channel_health_insights': {
@@ -3903,365 +3871,14 @@ class AppLocalizations {
       AppLanguage.es: '{description}\n\nPospuso esta recomendación hace 1 mes. Aún no ha creado el recordatorio relacionado.',
       AppLanguage.ar: '{description}\n\nقمت بتأجيل هذه التوصية منذ شهر واحد. لم تقم بعد بإنشاء التذكير ذي الصلة.',
     },
-
-    // ============ PREMIUM SUBSCRIPTION ============
-    'premium': {
-      AppLanguage.en: 'Premium',
-      AppLanguage.tr: 'Premium',
-      AppLanguage.de: 'Premium',
-      AppLanguage.es: 'Premium',
-      AppLanguage.ar: 'بريميوم',
-    },
-    'premium_title': {
-      AppLanguage.en: 'PetCare Premium',
-      AppLanguage.tr: 'PetCare Premium',
-      AppLanguage.de: 'PetCare Premium',
-      AppLanguage.es: 'PetCare Premium',
-      AppLanguage.ar: 'PetCare بريميوم',
-    },
-    'premium_subtitle': {
-      AppLanguage.en: 'Unlock all features for the best pet care experience',
-      AppLanguage.tr: 'En iyi evcil hayvan bakımı deneyimi için tüm özelliklerin kilidini açın',
-      AppLanguage.de: 'Schalte alle Funktionen für das beste Haustierpflege-Erlebnis frei',
-      AppLanguage.es: 'Desbloquea todas las funciones para la mejor experiencia de cuidado de mascotas',
-      AppLanguage.ar: 'افتح جميع الميزات للحصول على أفضل تجربة رعاية للحيوانات الأليفة',
-    },
-    'premium_feature_no_ads': {
-      AppLanguage.en: 'No Ads',
-      AppLanguage.tr: 'Reklamsız',
-      AppLanguage.de: 'Keine Werbung',
-      AppLanguage.es: 'Sin Anuncios',
-      AppLanguage.ar: 'بدون إعلانات',
-    },
-    'premium_feature_no_ads_desc': {
-      AppLanguage.en: 'Enjoy an ad-free experience',
-      AppLanguage.tr: 'Reklamsız bir deneyimin keyfini çıkarın',
-      AppLanguage.de: 'Genießen Sie ein werbefreies Erlebnis',
-      AppLanguage.es: 'Disfruta de una experiencia sin anuncios',
-      AppLanguage.ar: 'استمتع بتجربة خالية من الإعلانات',
-    },
-    'premium_feature_ai_chat': {
-      AppLanguage.en: 'AI Pet Assistant',
-      AppLanguage.tr: 'AI Evcil Hayvan Asistanı',
-      AppLanguage.de: 'KI-Haustier-Assistent',
-      AppLanguage.es: 'Asistente de Mascotas IA',
-      AppLanguage.ar: 'مساعد الحيوانات الأليفة الذكي',
-    },
-    'premium_feature_ai_chat_desc': {
-      AppLanguage.en: 'Get instant answers to your pet care questions',
-      AppLanguage.tr: 'Evcil hayvan bakımı sorularınıza anında yanıt alın',
-      AppLanguage.de: 'Erhalten Sie sofortige Antworten auf Ihre Haustierpflege-Fragen',
-      AppLanguage.es: 'Obtén respuestas instantáneas a tus preguntas sobre el cuidado de mascotas',
-      AppLanguage.ar: 'احصل على إجابات فورية لأسئلة رعاية حيوانك الأليف',
-    },
-    'premium_feature_family': {
-      AppLanguage.en: 'Family Sharing',
-      AppLanguage.tr: 'Aile Paylaşımı',
-      AppLanguage.de: 'Familienfreigabe',
-      AppLanguage.es: 'Compartir en Familia',
-      AppLanguage.ar: 'مشاركة العائلة',
-    },
-    'premium_feature_family_desc': {
-      AppLanguage.en: 'Share pet care with family members',
-      AppLanguage.tr: 'Evcil hayvan bakımını aile üyeleriyle paylaşın',
-      AppLanguage.de: 'Teilen Sie die Haustierpflege mit Familienmitgliedern',
-      AppLanguage.es: 'Comparte el cuidado de mascotas con miembros de la familia',
-      AppLanguage.ar: 'شارك رعاية الحيوانات الأليفة مع أفراد العائلة',
-    },
-    'premium_feature_unlimited_pets': {
-      AppLanguage.en: 'Unlimited Pets',
-      AppLanguage.tr: 'Sınırsız Evcil Hayvan',
-      AppLanguage.de: 'Unbegrenzte Haustiere',
-      AppLanguage.es: 'Mascotas Ilimitadas',
-      AppLanguage.ar: 'حيوانات أليفة غير محدودة',
-    },
-    'premium_feature_unlimited_pets_desc': {
-      AppLanguage.en: 'Add and manage unlimited pets',
-      AppLanguage.tr: 'Sınırsız evcil hayvan ekleyin ve yönetin',
-      AppLanguage.de: 'Fügen Sie unbegrenzt Haustiere hinzu und verwalten Sie diese',
-      AppLanguage.es: 'Añade y gestiona mascotas ilimitadas',
-      AppLanguage.ar: 'أضف وأدر حيوانات أليفة غير محدودة',
-    },
-    'premium_feature_insights': {
-      AppLanguage.en: 'Advanced Insights',
-      AppLanguage.tr: 'Gelişmiş Analizler',
-      AppLanguage.de: 'Erweiterte Einblicke',
-      AppLanguage.es: 'Análisis Avanzados',
-      AppLanguage.ar: 'رؤى متقدمة',
-    },
-    'premium_feature_insights_desc': {
-      AppLanguage.en: 'Detailed health analytics and trends',
-      AppLanguage.tr: 'Detaylı sağlık analizleri ve trendler',
-      AppLanguage.de: 'Detaillierte Gesundheitsanalysen und Trends',
-      AppLanguage.es: 'Análisis de salud detallados y tendencias',
-      AppLanguage.ar: 'تحليلات صحية مفصلة واتجاهات',
-    },
-    'monthly': {
-      AppLanguage.en: 'Monthly',
-      AppLanguage.tr: 'Aylık',
-      AppLanguage.de: 'Monatlich',
-      AppLanguage.es: 'Mensual',
-      AppLanguage.ar: 'شهري',
-    },
-    'yearly': {
-      AppLanguage.en: 'Yearly',
-      AppLanguage.tr: 'Yıllık',
-      AppLanguage.de: 'Jährlich',
-      AppLanguage.es: 'Anual',
-      AppLanguage.ar: 'سنوي',
-    },
-    'per_month': {
-      AppLanguage.en: '/month',
-      AppLanguage.tr: '/ay',
-      AppLanguage.de: '/Monat',
-      AppLanguage.es: '/mes',
-      AppLanguage.ar: '/شهر',
-    },
-    'per_year': {
-      AppLanguage.en: '/year',
-      AppLanguage.tr: '/yıl',
-      AppLanguage.de: '/Jahr',
-      AppLanguage.es: '/año',
-      AppLanguage.ar: '/سنة',
-    },
-    'save_percent': {
-      AppLanguage.en: 'Save {percent}%',
-      AppLanguage.tr: '%{percent} Tasarruf',
-      AppLanguage.de: '{percent}% sparen',
-      AppLanguage.es: 'Ahorra {percent}%',
-      AppLanguage.ar: 'وفر {percent}%',
-    },
-    'best_value': {
-      AppLanguage.en: 'Best Value',
-      AppLanguage.tr: 'En İyi Değer',
-      AppLanguage.de: 'Bester Wert',
-      AppLanguage.es: 'Mejor Valor',
-      AppLanguage.ar: 'أفضل قيمة',
-    },
-    'subscribe': {
-      AppLanguage.en: 'Subscribe',
-      AppLanguage.tr: 'Abone Ol',
-      AppLanguage.de: 'Abonnieren',
-      AppLanguage.es: 'Suscribirse',
-      AppLanguage.ar: 'اشترك',
-    },
-    'restore_purchases': {
-      AppLanguage.en: 'Restore Purchases',
-      AppLanguage.tr: 'Satın Almaları Geri Yükle',
-      AppLanguage.de: 'Käufe wiederherstellen',
-      AppLanguage.es: 'Restaurar Compras',
-      AppLanguage.ar: 'استعادة المشتريات',
-    },
-    'promo_code': {
-      AppLanguage.en: 'Promo Code',
-      AppLanguage.tr: 'Promosyon Kodu',
-      AppLanguage.de: 'Aktionscode',
-      AppLanguage.es: 'Código Promocional',
-      AppLanguage.ar: 'رمز ترويجي',
-    },
-    'enter_promo_code': {
-      AppLanguage.en: 'Enter promo code',
-      AppLanguage.tr: 'Promosyon kodunu girin',
-      AppLanguage.de: 'Aktionscode eingeben',
-      AppLanguage.es: 'Ingresa el código promocional',
-      AppLanguage.ar: 'أدخل الرمز الترويجي',
-    },
-    'apply': {
-      AppLanguage.en: 'Apply',
-      AppLanguage.tr: 'Uygula',
-      AppLanguage.de: 'Anwenden',
-      AppLanguage.es: 'Aplicar',
-      AppLanguage.ar: 'تطبيق',
-    },
-    'promo_code_applied': {
-      AppLanguage.en: 'Promo code applied! Premium active until {date}',
-      AppLanguage.tr: 'Promosyon kodu uygulandı! Premium {date} tarihine kadar aktif',
-      AppLanguage.de: 'Aktionscode angewendet! Premium aktiv bis {date}',
-      AppLanguage.es: 'Código promocional aplicado! Premium activo hasta {date}',
-      AppLanguage.ar: 'تم تطبيق الرمز الترويجي! بريميوم نشط حتى {date}',
-    },
-    'invalid_promo_code': {
-      AppLanguage.en: 'Invalid promo code',
-      AppLanguage.tr: 'Geçersiz promosyon kodu',
-      AppLanguage.de: 'Ungültiger Aktionscode',
-      AppLanguage.es: 'Código promocional inválido',
-      AppLanguage.ar: 'رمز ترويجي غير صالح',
-    },
-    'purchase_success': {
-      AppLanguage.en: 'Welcome to Premium! Enjoy all features.',
-      AppLanguage.tr: 'Premium\'a hoş geldiniz! Tüm özelliklerin keyfini çıkarın.',
-      AppLanguage.de: 'Willkommen bei Premium! Genießen Sie alle Funktionen.',
-      AppLanguage.es: '¡Bienvenido a Premium! Disfruta de todas las funciones.',
-      AppLanguage.ar: 'مرحباً بك في بريميوم! استمتع بجميع الميزات.',
-    },
-    'purchase_failed': {
-      AppLanguage.en: 'Purchase failed. Please try again.',
-      AppLanguage.tr: 'Satın alma başarısız. Lütfen tekrar deneyin.',
-      AppLanguage.de: 'Kauf fehlgeschlagen. Bitte versuchen Sie es erneut.',
-      AppLanguage.es: 'La compra falló. Por favor, inténtalo de nuevo.',
-      AppLanguage.ar: 'فشلت عملية الشراء. يرجى المحاولة مرة أخرى.',
-    },
-    'restore_success': {
-      AppLanguage.en: 'Purchases restored successfully!',
-      AppLanguage.tr: 'Satın almalar başarıyla geri yüklendi!',
-      AppLanguage.de: 'Käufe erfolgreich wiederhergestellt!',
-      AppLanguage.es: '¡Compras restauradas con éxito!',
-      AppLanguage.ar: 'تمت استعادة المشتريات بنجاح!',
-    },
-    'restore_failed': {
-      AppLanguage.en: 'No previous purchases found.',
-      AppLanguage.tr: 'Önceki satın alma bulunamadı.',
-      AppLanguage.de: 'Keine früheren Käufe gefunden.',
-      AppLanguage.es: 'No se encontraron compras anteriores.',
-      AppLanguage.ar: 'لم يتم العثور على مشتريات سابقة.',
-    },
-    'premium_active': {
-      AppLanguage.en: 'Premium Active',
-      AppLanguage.tr: 'Premium Aktif',
-      AppLanguage.de: 'Premium Aktiv',
-      AppLanguage.es: 'Premium Activo',
-      AppLanguage.ar: 'بريميوم نشط',
-    },
-    'premium_expires': {
-      AppLanguage.en: 'Expires: {date}',
-      AppLanguage.tr: 'Bitiş: {date}',
-      AppLanguage.de: 'Läuft ab: {date}',
-      AppLanguage.es: 'Expira: {date}',
-      AppLanguage.ar: 'ينتهي: {date}',
-    },
-    'auto_renews': {
-      AppLanguage.en: 'Auto-renews on {date}',
-      AppLanguage.tr: '{date} tarihinde otomatik yenilenir',
-      AppLanguage.de: 'Verlängert sich automatisch am {date}',
-      AppLanguage.es: 'Se renueva automáticamente el {date}',
-      AppLanguage.ar: 'يتجدد تلقائياً في {date}',
-    },
-    'manage_subscription': {
-      AppLanguage.en: 'Manage Subscription',
-      AppLanguage.tr: 'Aboneliği Yönet',
-      AppLanguage.de: 'Abonnement verwalten',
-      AppLanguage.es: 'Gestionar Suscripción',
-      AppLanguage.ar: 'إدارة الاشتراك',
-    },
-    'manage_in_store': {
-      AppLanguage.en: 'Manage in App Store',
-      AppLanguage.tr: 'Mağazada Yönet',
-      AppLanguage.de: 'Im Store verwalten',
-      AppLanguage.es: 'Gestionar en la tienda',
-      AppLanguage.ar: 'إدارة في المتجر',
-    },
-    'terms_of_service': {
-      AppLanguage.en: 'Terms of Service',
-      AppLanguage.tr: 'Kullanım Koşulları',
-      AppLanguage.de: 'Nutzungsbedingungen',
-      AppLanguage.es: 'Términos de Servicio',
-      AppLanguage.ar: 'شروط الخدمة',
-    },
-    'privacy_policy': {
-      AppLanguage.en: 'Privacy Policy',
-      AppLanguage.tr: 'Gizlilik Politikası',
-      AppLanguage.de: 'Datenschutzrichtlinie',
-      AppLanguage.es: 'Política de Privacidad',
-      AppLanguage.ar: 'سياسة الخصوصية',
-    },
-    'subscription_note': {
-      AppLanguage.en: 'Subscription automatically renews unless cancelled at least 24 hours before the end of the current period.',
-      AppLanguage.tr: 'Abonelik, mevcut dönemin bitiminden en az 24 saat önce iptal edilmediği sürece otomatik olarak yenilenir.',
-      AppLanguage.de: 'Das Abonnement verlängert sich automatisch, sofern es nicht mindestens 24 Stunden vor Ablauf des aktuellen Zeitraums gekündigt wird.',
-      AppLanguage.es: 'La suscripción se renueva automáticamente a menos que se cancele al menos 24 horas antes del final del período actual.',
-      AppLanguage.ar: 'يتم تجديد الاشتراك تلقائياً ما لم يتم إلغاؤه قبل 24 ساعة على الأقل من نهاية الفترة الحالية.',
-    },
-    'coming_soon': {
-      AppLanguage.en: 'Coming Soon',
-      AppLanguage.tr: 'Çok Yakında',
-      AppLanguage.de: 'Demnächst',
-      AppLanguage.es: 'Próximamente',
-      AppLanguage.ar: 'قريباً',
-    },
-    'free_trial': {
-      AppLanguage.en: '7-day free trial',
-      AppLanguage.tr: '7 günlük ücretsiz deneme',
-      AppLanguage.de: '7 Tage kostenlos testen',
-      AppLanguage.es: 'Prueba gratuita de 7 días',
-      AppLanguage.ar: 'تجربة مجانية لمدة 7 أيام',
-    },
-    'then_price': {
-      AppLanguage.en: 'then {price}',
-      AppLanguage.tr: 'sonra {price}',
-      AppLanguage.de: 'dann {price}',
-      AppLanguage.es: 'luego {price}',
-      AppLanguage.ar: 'ثم {price}',
-    },
   };
 
   static String get(String key) {
     return _translations[key]?[currentLanguage] ?? key;
   }
 
-  /// Get system language from device
-  static AppLanguage getSystemLanguage() {
-    try {
-      final locale = ui.PlatformDispatcher.instance.locale;
-      final languageCode = locale.languageCode.toLowerCase();
-
-      // Map system language to supported languages
-      switch (languageCode) {
-        case 'tr':
-          return AppLanguage.tr;
-        case 'de':
-          return AppLanguage.de;
-        case 'es':
-          return AppLanguage.es;
-        case 'ar':
-          return AppLanguage.ar;
-        case 'en':
-        default:
-          return AppLanguage.en; // Fallback to English
-      }
-    } catch (e) {
-      debugPrint('Error getting system language: $e');
-      return AppLanguage.en; // Fallback on error
-    }
-  }
-
-  /// Initialize language from SharedPreferences or system
-  static Future<void> initLanguage() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final savedLangCode = prefs.getString('app_language');
-
-      if (savedLangCode != null) {
-        // User has manually selected a language before
-        final savedLang = AppLanguage.values.firstWhere(
-          (e) => e.toString().split('.').last == savedLangCode,
-          orElse: () => getSystemLanguage(),
-        );
-        currentLanguage = savedLang;
-        debugPrint('📱 Loaded saved language: $savedLang');
-      } else {
-        // First launch - use system language
-        currentLanguage = getSystemLanguage();
-        debugPrint('📱 Using system language: $currentLanguage');
-        // Save the detected language
-        await prefs.setString('app_language', currentLanguage.toString().split('.').last);
-      }
-    } catch (e) {
-      debugPrint('Error initializing language: $e');
-      currentLanguage = AppLanguage.en;
-    }
-  }
-
-  static Future<void> setLanguage(AppLanguage language) async {
+  static void setLanguage(AppLanguage language) {
     currentLanguage = language;
-
-    // Save to SharedPreferences for persistence
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('app_language', language.toString().split('.').last);
-      debugPrint('📱 Saved language: $language');
-    } catch (e) {
-      debugPrint('Error saving language: $e');
-    }
   }
 
   // Localized age text

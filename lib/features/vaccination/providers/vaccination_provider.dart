@@ -32,7 +32,7 @@ class VaccinationNotifier extends StateNotifier<List<Vaccination>> {
   }) async {
     final vaccination = Vaccination(
       id: _uuid.v4(),
-      catId: catId,
+      petId: catId,
       name: name,
       date: date,
       nextDate: nextDate,

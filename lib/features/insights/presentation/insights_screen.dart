@@ -6,6 +6,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/localization.dart';
 import '../../../core/widgets/app_toast.dart';
 import '../../cats/providers/cats_provider.dart';
+import '../../dogs/providers/dogs_provider.dart';
 import '../../reminders/providers/reminders_provider.dart';
 import '../../reminders/providers/completions_provider.dart';
 import '../../weight/providers/weight_provider.dart';
@@ -32,17 +33,23 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
 
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
-    
+
     try {
       // Tüm verileri yeniden yükle
       await ref.read(remindersProvider.notifier).loadReminders();
-      
+
       // Her kedi için kilo verilerini yükle
       final cats = ref.read(catsProvider);
       for (final cat in cats) {
         await ref.read(weightProvider.notifier).loadWeightRecords(cat.id);
       }
-      
+
+      // Her köpek için kilo verilerini yükle
+      final dogs = ref.read(dogsProvider);
+      for (final dog in dogs) {
+        await ref.read(weightProvider.notifier).loadWeightRecords(dog.id);
+      }
+
       // Insights'ları güncelle
       _generateInsights();
     } finally {
@@ -52,12 +59,14 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
 
   Future<void> _generateInsights() async {
     final cats = ref.read(catsProvider);
+    final dogs = ref.read(dogsProvider);
     final reminders = ref.read(remindersProvider);
     final completions = ref.read(completionsProvider);
     final weights = ref.read(weightProvider);
 
     final insights = await InsightsService.instance.generateInsights(
       cats: cats,
+      dogs: dogs,
       reminders: reminders,
       weightRecords: weights,
       completedDates: completions.completedDates,
@@ -84,8 +93,10 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
     ref.listen(completionsProvider, (_, __) => _generateInsights());
     ref.listen(weightProvider, (_, __) => _generateInsights());
     ref.listen(catsProvider, (_, __) => _generateInsights());
+    ref.listen(dogsProvider, (_, __) => _generateInsights());
 
     final cats = ref.watch(catsProvider);
+    final dogs = ref.watch(dogsProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
@@ -114,7 +125,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
                       final insight = _insights[index];
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 12),
-                        child: _buildInsightCard(context, insight, isDark, cats),
+                        child: _buildInsightCard(context, insight, isDark, cats, dogs),
                       );
                     },
                   ),
@@ -157,10 +168,10 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
     );
   }
 
-  Widget _buildInsightCard(BuildContext context, Insight insight, bool isDark, List cats) {
+  Widget _buildInsightCard(BuildContext context, Insight insight, bool isDark, List cats, List dogs) {
     return GestureDetector(
       onTap: insight.actionRoute != null
-          ? () => _handleAction(context, insight, cats)
+          ? () => _handleAction(context, insight, cats, dogs)
           : null,
       onLongPress: () => _showInsightOptions(context, insight),
       child: Container(
@@ -289,30 +300,34 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
     );
   }
 
-  void _handleAction(BuildContext context, Insight insight, List cats) {
+  void _handleAction(BuildContext context, Insight insight, List cats, List dogs) {
     final route = insight.actionRoute;
     final data = insight.actionData;
-    
+
     if (route == null) return;
-    
+
     // Hatırlatıcı ekleme
     if (route.contains('/reminder/add')) {
-      String? catId = data?['catId'];
+      String? petId = data?['catId'] ?? data?['petId']; // Support both old and new keys
       String? type = data?['type'];
       String? title = data?['title'];
       String? subType = data?['subType'];
-      
-      // Eğer catId yoksa ve kedi varsa ilk kediyi seç
-      if (catId == null && cats.isNotEmpty) {
-        catId = cats.first.id;
+
+      // Eğer petId yoksa ve bir pet varsa ilk pet'i seç
+      if (petId == null) {
+        if (cats.isNotEmpty) {
+          petId = cats.first.id;
+        } else if (dogs.isNotEmpty) {
+          petId = dogs.first.id;
+        }
       }
-      
+
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (_) => AddReminderScreen(
             initialType: type,
-            preselectedCatId: catId,
+            preselectedCatId: petId,
             initialTitle: title,
             initialSubType: subType,
           ),
@@ -320,27 +335,29 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
       ).then((_) => _loadData()); // Geri dönünce yenile
       return;
     }
-    
+
     // Kilo ekleme
     if (route.contains('/weight/add')) {
-      if (cats.isEmpty) return;
-      
-      final catId = data?['catId'];
-      dynamic targetCat;
-      
-      if (catId != null) {
+      final allPets = [...cats, ...dogs];
+      if (allPets.isEmpty) return;
+
+      final petId = data?['catId'] ?? data?['petId'];
+      dynamic targetPet;
+
+      if (petId != null) {
         try {
-          targetCat = cats.firstWhere((c) => c.id == catId);
+          targetPet = allPets.firstWhere((p) => p.id == petId);
         } catch (_) {
-          targetCat = cats.first;
+          targetPet = allPets.first;
         }
       } else {
-        targetCat = cats.first;
+        targetPet = allPets.first;
       }
-      
+
+
       Navigator.push(
         context,
-        MaterialPageRoute(builder: (_) => WeightScreen(cat: targetCat)),
+        MaterialPageRoute(builder: (_) => WeightScreen(cat: targetPet)),
       ).then((_) => _loadData()); // Geri dönünce yenile
       return;
     }

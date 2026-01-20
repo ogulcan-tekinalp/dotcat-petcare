@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../../core/services/firestore_service.dart';
+import '../../../core/services/ad_service.dart';
 import '../../../data/database/database_helper.dart';
 import '../../../data/models/reminder_completion.dart';
 
@@ -134,6 +135,9 @@ class CompletionsNotifier extends StateNotifier<CompletionsState> {
           completionTimes: newTimes,
         );
       }
+
+      // Show ad with 30% probability after completing a reminder
+      await AdService.instance.onReminderCompleted();
     } catch (e) {
       debugPrint('CompletionsNotifier: saveCompletion error: $e');
       state = state.copyWith(error: e.toString());

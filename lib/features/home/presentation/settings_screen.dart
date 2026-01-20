@@ -6,8 +6,10 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/localization.dart';
 import '../../../core/providers/language_provider.dart';
 import '../../../core/services/auth_service.dart';
+import '../../../core/services/premium_service.dart';
 import '../../../main.dart';
 import '../../auth/presentation/login_screen.dart';
+import '../../premium/presentation/premium_screen.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -54,12 +56,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         physics: const BouncingScrollPhysics(),
         padding: const EdgeInsets.all(16),
         children: [
+          // Premium section
+          _buildSectionTitle(AppLocalizations.get('premium')),
+          _buildPremiumTile(context, isDark),
+
+          const SizedBox(height: 20),
+
           // Account section
           _buildSectionTitle(AppLocalizations.get('account')),
           _buildAccountTile(context, ref, user, isDark),
-          
+
           const SizedBox(height: 20),
-          
+
           // Appearance section
           _buildSectionTitle(AppLocalizations.get('appearance')),
           _buildSettingsTile(
@@ -102,6 +110,93 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     );
   }
 
+
+  Widget _buildPremiumTile(BuildContext context, bool isDark) {
+    final premiumStatus = ref.watch(premiumStatusProvider);
+    final isPremium = premiumStatus == PremiumStatus.premium;
+
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const PremiumScreen()),
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: isPremium
+              ? LinearGradient(
+                  colors: [
+                    AppColors.primary.withOpacity(0.1),
+                    AppColors.primary.withOpacity(0.05),
+                  ],
+                )
+              : LinearGradient(
+                  colors: [
+                    Colors.amber.shade100,
+                    Colors.orange.shade100,
+                  ],
+                ),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isPremium ? AppColors.primary.withOpacity(0.3) : Colors.amber.shade300,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: isPremium ? AppColors.primary.withOpacity(0.1) : Colors.amber.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                isPremium ? Icons.verified : Icons.workspace_premium,
+                color: isPremium ? AppColors.primary : Colors.amber.shade700,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    isPremium
+                        ? AppLocalizations.get('premium_active')
+                        : AppLocalizations.get('premium_title'),
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: isPremium ? AppColors.primary : Colors.amber.shade800,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    isPremium
+                        ? AppLocalizations.get('manage_subscription')
+                        : AppLocalizations.get('premium_subtitle'),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isPremium ? context.textSecondary : Colors.amber.shade700,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.chevron_right,
+              color: isPremium ? AppColors.primary : Colors.amber.shade700,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   Widget _buildAccountTile(BuildContext context, WidgetRef ref, User? user, bool isDark) {
     if (user != null) {

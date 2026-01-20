@@ -3,9 +3,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/services/insights_service.dart';
 import '../../../core/services/insights_notification_service.dart';
 import '../../../data/models/cat.dart';
+import '../../../data/models/dog.dart';
 import '../../../data/models/reminder.dart';
 import '../../../data/models/weight_record.dart';
 import '../../cats/providers/cats_provider.dart';
+import '../../dogs/providers/dogs_provider.dart';
 import '../../reminders/providers/reminders_provider.dart';
 import '../../reminders/providers/completions_provider.dart';
 import '../../weight/providers/weight_provider.dart';
@@ -13,12 +15,14 @@ import '../../weight/providers/weight_provider.dart';
 /// All insights provider (unfiltered)
 final allInsightsProvider = FutureProvider<List<Insight>>((ref) async {
   final cats = ref.watch(catsProvider);
+  final dogs = ref.watch(dogsProvider);
   final reminders = ref.watch(remindersProvider);
   final completionsState = ref.watch(completionsProvider);
   final weights = ref.watch(weightProvider);
 
   return InsightsService.instance.generateInsights(
     cats: cats,
+    dogs: dogs,
     reminders: reminders,
     weightRecords: weights,
     completedDates: completionsState.completedDates,
