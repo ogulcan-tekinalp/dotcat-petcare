@@ -169,11 +169,32 @@ class PremiumService {
   /// Get available offerings (subscription packages)
   Future<Offerings?> getOfferings() async {
     try {
+      debugPrint('PremiumService: Fetching offerings...');
       _offerings = await Purchases.getOfferings();
+
+      // Debug logging for offerings
+      debugPrint('PremiumService: All offerings count: ${_offerings?.all.length}');
+      debugPrint('PremiumService: Current offering: ${_offerings?.current?.identifier}');
+
+      if (_offerings?.current != null) {
+        debugPrint('PremiumService: Current offering packages:');
+        for (final package in _offerings!.current!.availablePackages) {
+          debugPrint('  - ${package.identifier}: ${package.storeProduct.priceString} (${package.packageType})');
+        }
+        debugPrint('PremiumService: Monthly: ${_offerings?.current?.monthly?.storeProduct.priceString}');
+        debugPrint('PremiumService: Annual: ${_offerings?.current?.annual?.storeProduct.priceString}');
+      } else {
+        debugPrint('PremiumService: WARNING - No current offering found!');
+        debugPrint('PremiumService: This usually means:');
+        debugPrint('  1. Products are not configured in RevenueCat dashboard');
+        debugPrint('  2. Offering is not set as "Current"');
+        debugPrint('  3. Products are not approved in App Store Connect / Google Play');
+      }
+
       return _offerings;
     } catch (e) {
       debugPrint('PremiumService: Failed to get offerings: $e');
-      return null;
+      rethrow; // Rethrow so the UI can handle the error
     }
   }
 

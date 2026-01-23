@@ -190,7 +190,7 @@ class _HealthScreenState extends ConsumerState<HealthScreen> {
                 ElevatedButton(
                   onPressed: (selectedType == null || titleController.text.isEmpty) ? null : () {
                     ref.read(healthProvider.notifier).addHealthNote(
-                      catId: widget.cat.id,
+                      petId: widget.cat.id,
                       title: titleController.text,
                       type: selectedType!,
                       description: descController.text.isEmpty ? null : descController.text,

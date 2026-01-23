@@ -11,6 +11,7 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/services/storage_service.dart';
 import '../../../data/models/dog.dart';
 import '../providers/dogs_provider.dart';
+import '../../weight/providers/weight_provider.dart';
 
 class EditDogScreen extends ConsumerStatefulWidget {
   final Dog dog;
@@ -204,6 +205,21 @@ class _EditDogScreenState extends ConsumerState<EditDogScreen> {
       );
 
       await ref.read(dogsProvider.notifier).updateDog(updatedDog);
+
+      // Kilo değiştiyse ve yeni kilo girildiyse, kilo kaydı ekle
+      final newWeightValue = _weightController.text.trim().isEmpty ? null : double.tryParse(_weightController.text.trim().replaceAll(',', '.'));
+      if (newWeightValue != null && (widget.dog.weight == null || widget.dog.weight != newWeightValue)) {
+        try {
+          await ref.read(weightProvider.notifier).addWeightRecord(
+            catId: widget.dog.id,
+            weight: newWeightValue,
+            notes: null,
+          );
+        } catch (e) {
+          debugPrint('EditDogScreen: Weight record error: $e');
+          // Weight record eklenemese bile köpeği güncelle
+        }
+      }
 
       if (mounted) {
         _showToast(AppLocalizations.get('dog_updated'));

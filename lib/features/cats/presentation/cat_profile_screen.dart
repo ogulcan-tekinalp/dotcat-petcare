@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/constants/reminder_constants.dart';
 import '../../../core/utils/localization.dart';
 import '../../../core/utils/date_helper.dart';
 import '../../../core/utils/page_transitions.dart';
@@ -43,6 +44,9 @@ class CatProfileScreen extends ConsumerStatefulWidget {
 class _CatProfileScreenState extends ConsumerState<CatProfileScreen> {
   late dynamic _currentPet; // Can be Cat or Dog
 
+  // Overdue hesaplama için tarih aralığı (son 30 gün)
+  static const int _overdueRangeDays = 30;
+
   // Helper getters for pet properties
   String get _petId => _currentPet.id;
   String get _petName => _currentPet.name;
@@ -63,6 +67,75 @@ class _CatProfileScreenState extends ConsumerState<CatProfileScreen> {
   Future<void> _loadData() async {
     await ref.read(remindersProvider.notifier).loadReminders();
     await ref.read(weightProvider.notifier).loadWeightRecords(_petId);
+  }
+
+  /// Tekrar frekansına göre sonraki tarihi hesapla
+  DateTime? _calculateNextDate(DateTime current, String frequency) {
+    switch (frequency) {
+      case 'daily':
+        return current.add(const Duration(days: 1));
+      case 'weekly':
+        return current.add(const Duration(days: 7));
+      case 'monthly':
+        return DateTime(current.year, current.month + 1, current.day);
+      case 'quarterly':
+        return DateTime(current.year, current.month + 3, current.day);
+      case 'biannual':
+        return DateTime(current.year, current.month + 6, current.day);
+      case 'yearly':
+        return DateTime(current.year + 1, current.month, current.day);
+      default:
+        if (frequency.startsWith('custom_')) {
+          final days = int.tryParse(frequency.substring(7));
+          if (days != null) return current.add(Duration(days: days));
+        }
+        return null;
+    }
+  }
+
+  /// Bir reminder için tüm gecikmiş occurence'ları hesapla (home_screen ile aynı mantık)
+  List<DateTime> _getOverdueOccurrences(Reminder reminder, Set<String> completedDates) {
+    final overdueList = <DateTime>[];
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final rangeStart = today.subtract(Duration(days: _overdueRangeDays));
+
+    if (!reminder.isActive) return overdueList;
+
+    if (reminder.frequency == 'once') {
+      // Tek seferlik - sadece createdAt tarihinde
+      final date = DateTime(reminder.createdAt.year, reminder.createdAt.month, reminder.createdAt.day);
+      if (date.isBefore(today) && date.isAfter(rangeStart.subtract(const Duration(days: 1)))) {
+        final key = '${reminder.id}_${date.toIso8601String().split('T')[0]}';
+        if (!completedDates.contains(key) && !reminder.isCompleted) {
+          overdueList.add(date);
+        }
+      }
+    } else {
+      // Tekrarlayan - tüm occurence'ları oluştur
+      DateTime current = DateTime(reminder.createdAt.year, reminder.createdAt.month, reminder.createdAt.day);
+
+      // Range başlangıcına kadar ilerle
+      while (current.isBefore(rangeStart)) {
+        final next = _calculateNextDate(current, reminder.frequency);
+        if (next == null) break;
+        current = next;
+      }
+
+      // Range içindeki geçmiş tarihleri kontrol et
+      while (current.isBefore(today)) {
+        final key = '${reminder.id}_${current.toIso8601String().split('T')[0]}';
+        if (!completedDates.contains(key)) {
+          overdueList.add(current);
+        }
+
+        final next = _calculateNextDate(current, reminder.frequency);
+        if (next == null) break;
+        current = next;
+      }
+    }
+
+    return overdueList;
   }
 
   @override
@@ -90,14 +163,23 @@ class _CatProfileScreenState extends ConsumerState<CatProfileScreen> {
       return diff >= 0 && diff <= 7;
     }).toList()..sort((a, b) => a.nextDate!.compareTo(b.nextDate!));
 
-    // Gecikmiş görevler
-    final overdueTasks = catReminders.where((r) {
-      if (!r.isActive || r.nextDate == null) return false;
-      final reminderDate = DateTime(r.nextDate!.year, r.nextDate!.month, r.nextDate!.day);
-      if (!reminderDate.isBefore(today)) return false;
-      final key = '${r.id}_${reminderDate.toIso8601String().split('T')[0]}';
-      return !completions.completedDates.contains(key);
-    }).toList();
+    // Gecikmiş görevler - home screen ile aynı mantıkla hesapla
+    // Her reminder için tüm gecikmiş occurence'ları bul
+    final List<Map<String, dynamic>> overdueItems = [];
+    for (final reminder in catReminders) {
+      final overdueOccurrences = _getOverdueOccurrences(reminder, completions.completedDates);
+      for (final date in overdueOccurrences) {
+        overdueItems.add({
+          'reminder': reminder,
+          'date': date,
+        });
+      }
+    }
+    // Tarihe göre sırala (en yeniden en eskiye)
+    overdueItems.sort((a, b) => (b['date'] as DateTime).compareTo(a['date'] as DateTime));
+
+    // Eski kod için uyumluluk: overdueTasks listesi (reminder listesi olarak)
+    final overdueTasks = overdueItems.map((item) => item['reminder'] as Reminder).toSet().toList();
 
     return Scaffold(
       backgroundColor: isDark ? AppColors.backgroundDark : const Color(0xFFF8F9FA),
@@ -109,9 +191,9 @@ class _CatProfileScreenState extends ConsumerState<CatProfileScreen> {
             _buildHeader(isDark, weights),
             
             // Uyarılar (varsa)
-            if (overdueTasks.isNotEmpty)
+            if (overdueItems.isNotEmpty)
               SliverToBoxAdapter(
-                child: _buildAlertCard(overdueTasks, isDark),
+                child: _buildAlertCard(overdueItems, isDark),
               ),
 
             // Yaklaşan Görevler
@@ -132,11 +214,16 @@ class _CatProfileScreenState extends ConsumerState<CatProfileScreen> {
               ),
             ),
             
+            // Masraf Özeti
+            SliverToBoxAdapter(
+              child: _buildExpenseSummarySection(catReminders, completions, isDark),
+            ),
+
             // Tüm Kayıtlar
             SliverToBoxAdapter(
               child: _buildAllRecordsSection(catReminders, isDark),
             ),
-            
+
             const SliverToBoxAdapter(child: SizedBox(height: 100)),
           ],
         ),
@@ -356,7 +443,7 @@ class _CatProfileScreenState extends ConsumerState<CatProfileScreen> {
     );
   }
 
-  Widget _buildAlertCard(List<Reminder> overdueTasks, bool isDark) {
+  Widget _buildAlertCard(List<Map<String, dynamic>> overdueItems, bool isDark) {
     return Container(
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(18),
@@ -410,7 +497,7 @@ class _CatProfileScreenState extends ConsumerState<CatProfileScreen> {
               ),
               const SizedBox(width: 14),
               Text(
-                '${overdueTasks.length} Gecikmiş Görev',
+                '${overdueItems.length} ${AppLocalizations.get('overdue_tasks')}',
                 style: AppTypography.titleLarge.copyWith(
                   fontWeight: FontWeight.bold,
                   color: AppColors.error,
@@ -421,67 +508,72 @@ class _CatProfileScreenState extends ConsumerState<CatProfileScreen> {
               .fadeIn(duration: 500.ms)
               .slideX(begin: -0.2, end: 0, duration: 500.ms, curve: Curves.easeOutCubic),
           const SizedBox(height: 16),
-          ...overdueTasks.take(3).map((task) => Padding(
-            padding: const EdgeInsets.only(bottom: 10),
-            child: GestureDetector(
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => RecordDetailScreen(record: task, catName: _petName)),
-              ),
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.white.withOpacity(0.05) : Colors.white.withOpacity(0.5),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: AppColors.error.withOpacity(0.2),
-                    width: 1,
+          ...overdueItems.take(3).map((item) {
+            final task = item['reminder'] as Reminder;
+            final overdueDate = item['date'] as DateTime;
+            final index = overdueItems.indexOf(item);
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: GestureDetector(
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => RecordDetailScreen(record: task, catName: _petName)),
+                ),
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.white.withOpacity(0.05) : Colors.white.withOpacity(0.5),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: AppColors.error.withOpacity(0.2),
+                      width: 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: _getTypeColor(task.type).withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          _getTypeIcon(task.type),
+                          color: _getTypeColor(task.type),
+                          size: 18,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          task.title,
+                          style: AppTypography.bodyMedium.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppColors.error.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          _getRelativeDate(overdueDate),
+                          style: AppTypography.bodySmall.copyWith(
+                            color: AppColors.error,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: _getTypeColor(task.type).withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Icon(
-                        _getTypeIcon(task.type),
-                        color: _getTypeColor(task.type),
-                        size: 18,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        task.title,
-                        style: AppTypography.bodyMedium.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AppColors.error.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        _getRelativeDate(task.nextDate!),
-                        style: AppTypography.bodySmall.copyWith(
-                          color: AppColors.error,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ).animate()
-                .fadeIn(duration: 500.ms, delay: (100 * overdueTasks.indexOf(task)).ms)
-                .slideX(begin: -0.1, end: 0, duration: 500.ms, curve: Curves.easeOutCubic),
-          )),
+              ).animate()
+                  .fadeIn(duration: 500.ms, delay: (100 * index).ms)
+                  .slideX(begin: -0.1, end: 0, duration: 500.ms, curve: Curves.easeOutCubic),
+            );
+          }),
         ],
       ),
     ).animate()
@@ -952,6 +1044,308 @@ class _CatProfileScreenState extends ConsumerState<CatProfileScreen> {
     );
   }
 
+  Widget _buildExpenseSummarySection(List<Reminder> reminders, CompletionsState completions, bool isDark) {
+    // Bu pet'e ait reminder ID'leri
+    final reminderIds = reminders.map((r) => r.id).toList();
+
+    // Masrafları filtrele
+    final expenses = completions.allCompletions
+        .where((c) => reminderIds.contains(c.reminderId) && c.hasExpense)
+        .toList()
+      ..sort((a, b) => b.completedDate.compareTo(a.completedDate));
+
+    if (expenses.isEmpty) {
+      return const SizedBox.shrink(); // Masraf yoksa gösterme
+    }
+
+    // Para birimlerine göre topla
+    final expensesByCurrency = <String, double>{};
+    for (final expense in expenses) {
+      final currency = expense.currency ?? 'TRY';
+      expensesByCurrency[currency] = (expensesByCurrency[currency] ?? 0) + (expense.cost ?? 0);
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.account_balance_wallet_rounded, color: AppColors.success, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                AppLocalizations.get('expense_summary'),
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.white : Colors.black87,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // Toplam masraf kartları
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: isDark ? AppColors.surfaceDark : Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: isDark ? null : AppShadows.small,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Toplam masraflar
+                Text(
+                  AppLocalizations.get('total_expenses'),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 16,
+                  runSpacing: 8,
+                  children: expensesByCurrency.entries.map((entry) {
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: AppColors.success.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        '${entry.value.toStringAsFixed(2)} ${entry.key}',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.success,
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 16),
+
+                // Son masraflar listesi
+                Text(
+                  AppLocalizations.get('recent_expenses'),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ...expenses.take(5).map((expense) {
+                  // İlgili reminder'ı bul
+                  final reminder = reminders.firstWhere(
+                    (r) => r.id == expense.reminderId,
+                    orElse: () => reminders.first,
+                  );
+
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: AppColors.info.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(Icons.medical_services_rounded, color: AppColors.info, size: 18),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                reminder.title,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w500,
+                                  fontSize: 13,
+                                  color: isDark ? Colors.white : Colors.black87,
+                                ),
+                              ),
+                              Text(
+                                expense.vetClinicName ?? DateHelper.formatDate(expense.completedDate),
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Text(
+                          expense.formattedCost,
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                            color: AppColors.error,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+
+                // Daha fazla göster
+                if (expenses.length > 5) ...[
+                  const SizedBox(height: 8),
+                  Center(
+                    child: TextButton(
+                      onPressed: () => _showAllExpenses(expenses, reminders, isDark),
+                      child: Text(
+                        '${AppLocalizations.get('view_all')} (${expenses.length})',
+                        style: TextStyle(color: AppColors.primary),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAllExpenses(List expenses, List<Reminder> reminders, bool isDark) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: isDark ? AppColors.surfaceDark : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.7,
+          maxChildSize: 0.9,
+          minChildSize: 0.5,
+          expand: false,
+          builder: (context, scrollController) {
+            return Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.account_balance_wallet_rounded, color: AppColors.success),
+                      const SizedBox(width: 8),
+                      Text(
+                        AppLocalizations.get('all_expenses'),
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? Colors.white : Colors.black87,
+                        ),
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+                Expanded(
+                  child: ListView.builder(
+                    controller: scrollController,
+                    padding: const EdgeInsets.all(16),
+                    itemCount: expenses.length,
+                    itemBuilder: (context, index) {
+                      final expense = expenses[index];
+                      final reminder = reminders.firstWhere(
+                        (r) => r.id == expense.reminderId,
+                        orElse: () => reminders.first,
+                      );
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: isDark ? AppColors.backgroundDark : Colors.grey.shade50,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  reminder.title,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: isDark ? Colors.white : Colors.black87,
+                                  ),
+                                ),
+                                Text(
+                                  expense.formattedCost,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                    color: AppColors.error,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              DateHelper.formatDate(expense.completedDate),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                            if (expense.vetClinicName != null) ...[
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  Icon(Icons.local_hospital, size: 14, color: AppColors.textSecondary),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    expense.vetClinicName!,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                            if (expense.notes != null && expense.notes!.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                expense.notes!,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textSecondary,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   Widget _buildAllRecordsSection(List<Reminder> reminders, bool isDark) {
     if (reminders.isEmpty) {
       return Padding(
@@ -1001,7 +1395,7 @@ class _CatProfileScreenState extends ConsumerState<CatProfileScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Tüm Kayıtlar',
+                AppLocalizations.get('all_records'),
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -1009,7 +1403,7 @@ class _CatProfileScreenState extends ConsumerState<CatProfileScreen> {
                 ),
               ),
               Text(
-                '${reminders.length} kayıt',
+                AppLocalizations.get('x_records').replaceAll('{count}', '${reminders.length}'),
                 style: TextStyle(
                   fontSize: 13,
                   color: AppColors.textSecondary,
@@ -1278,13 +1672,14 @@ class _CatProfileScreenState extends ConsumerState<CatProfileScreen> {
               crossAxisSpacing: 12,
               children: [
                 _buildQuickActionGrid(Icons.star_rounded, 'DotCat', AppColors.primary, 'dotcat_complete'),
-                _buildQuickActionGrid(Icons.vaccines, 'Aşı', AppColors.vaccine, 'vaccine'),
-                _buildQuickActionGrid(Icons.medication, 'İlaç', AppColors.medicine, 'medicine'),
-                _buildQuickActionGrid(Icons.local_hospital, 'Veteriner', AppColors.vet, 'vet'),
-                _buildQuickActionGrid(Icons.content_cut, 'Tıraş', AppColors.grooming, 'grooming'),
-                _buildQuickActionGrid(Icons.restaurant, 'Mama', AppColors.food, 'food'),
-                _buildQuickActionGrid(Icons.fitness_center, 'Egzersiz', const Color(0xFFFF9800), 'exercise'),
-                _buildQuickActionGrid(Icons.monitor_weight, 'Kilo', AppColors.warning, 'weight'),
+                _buildQuickActionGrid(Icons.vaccines, AppLocalizations.get('reminder_type_vaccine'), AppColors.vaccine, 'vaccine'),
+                _buildQuickActionGrid(Icons.medication, AppLocalizations.get('reminder_type_medicine'), AppColors.medicine, 'medicine'),
+                _buildQuickActionGrid(Icons.local_hospital, AppLocalizations.get('reminder_type_vet'), AppColors.vet, 'vet'),
+                _buildQuickActionGrid(Icons.content_cut, AppLocalizations.get('reminder_type_grooming'), AppColors.grooming, 'grooming'),
+                _buildQuickActionGrid(Icons.restaurant, AppLocalizations.get('reminder_type_food'), AppColors.food, 'food'),
+                _buildQuickActionGrid(Icons.water_drop_rounded, AppLocalizations.get('reminder_type_water'), AppColors.water, 'water'),
+                _buildQuickActionGrid(Icons.cleaning_services_rounded, AppLocalizations.get('reminder_type_litter_cleaning'), AppColors.litterCleaning, 'litter_cleaning'),
+                _buildQuickActionGrid(Icons.more_horiz_rounded, AppLocalizations.get('more_categories'), AppColors.info, null),
               ],
             ),
             SizedBox(height: MediaQuery.of(context).padding.bottom + 16),
@@ -1294,7 +1689,7 @@ class _CatProfileScreenState extends ConsumerState<CatProfileScreen> {
     );
   }
 
-  Widget _buildQuickActionGrid(IconData icon, String label, Color color, String type) {
+  Widget _buildQuickActionGrid(IconData icon, String label, Color color, String? type) {
     final isDotCat = label == 'DotCat';
 
     return InkWell(
@@ -1305,6 +1700,9 @@ class _CatProfileScreenState extends ConsumerState<CatProfileScreen> {
             context,
             MaterialPageRoute(builder: (_) => WeightScreen(cat: _currentPet)),
           );
+        } else if (type == null) {
+          // Kategori seçim modalı göster
+          _showCategorySelectionModal();
         } else {
           Navigator.push(
             context,
@@ -1366,6 +1764,134 @@ class _CatProfileScreenState extends ConsumerState<CatProfileScreen> {
     );
   }
 
+  void _showCategorySelectionModal() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final categories = getReminderCategories(_petType);
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.7,
+        ),
+        decoration: BoxDecoration(
+          color: isDark ? AppColors.surfaceDark : Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade300,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    AppLocalizations.get('select_category'),
+                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            ),
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                itemCount: categories.length,
+                itemBuilder: (context, index) {
+                  final category = categories[index];
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.white.withOpacity(0.05) : category.color.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: category.color.withOpacity(0.3)),
+                    ),
+                    child: ExpansionTile(
+                      tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                      childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      leading: Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(colors: [category.color, category.color.withOpacity(0.8)]),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(category.icon, color: Colors.white, size: 22),
+                      ),
+                      title: Text(
+                        category.name,
+                        style: TextStyle(fontWeight: FontWeight.bold, color: category.color),
+                      ),
+                      subtitle: Text(
+                        '${category.types.length} ${AppLocalizations.get('types')}',
+                        style: TextStyle(fontSize: 12, color: isDark ? Colors.white60 : Colors.black54),
+                      ),
+                      children: [
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: category.types.map((type) {
+                            return InkWell(
+                              onTap: () {
+                                Navigator.pop(context);
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => AddReminderScreen(
+                                    preselectedCatId: _petId,
+                                    initialType: type.value,
+                                  )),
+                                );
+                              },
+                              borderRadius: BorderRadius.circular(12),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: isDark ? Colors.white.withOpacity(0.1) : Colors.white,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: type.color.withOpacity(0.5)),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(type.icon, color: type.color, size: 18),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      type.displayName,
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w500,
+                                        color: isDark ? Colors.white : Colors.black87,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+            SizedBox(height: MediaQuery.of(context).padding.bottom),
+          ],
+        ),
+      ),
+    );
+  }
+
   String _getFrequencyText(String frequency) {
     switch (frequency) {
       case 'once': return AppLocalizations.get('once');
@@ -1375,7 +1901,15 @@ class _CatProfileScreenState extends ConsumerState<CatProfileScreen> {
       case 'quarterly': return AppLocalizations.get('quarterly');
       case 'biannual': return AppLocalizations.get('biannual');
       case 'yearly': return AppLocalizations.get('yearly');
-      default: return frequency;
+      default:
+        // Handle custom_X format (e.g., custom_2, custom_14)
+        if (frequency.startsWith('custom_')) {
+          final days = int.tryParse(frequency.substring(7));
+          if (days != null) {
+            return AppLocalizations.get('every_x_days_format').replaceAll('{days}', days.toString());
+          }
+        }
+        return frequency;
     }
   }
 
@@ -1384,12 +1918,12 @@ class _CatProfileScreenState extends ConsumerState<CatProfileScreen> {
     final today = DateTime(now.year, now.month, now.day);
     final targetDate = DateTime(date.year, date.month, date.day);
     final diff = targetDate.difference(today).inDays;
-    
-    if (diff == 0) return 'Bugün';
-    if (diff == 1) return 'Yarın';
-    if (diff == -1) return 'Dün';
-    if (diff < 0) return '${-diff} gün önce';
-    if (diff <= 7) return '$diff gün sonra';
+
+    if (diff == 0) return AppLocalizations.get('today');
+    if (diff == 1) return AppLocalizations.get('tomorrow');
+    if (diff == -1) return AppLocalizations.get('yesterday');
+    if (diff < 0) return AppLocalizations.get('x_days_ago').replaceAll('{days}', '${-diff}');
+    if (diff <= 7) return AppLocalizations.get('in_x_days').replaceAll('{days}', '$diff');
     return DateHelper.formatDate(date);
   }
 
@@ -1429,15 +1963,15 @@ class _CatProfileScreenState extends ConsumerState<CatProfileScreen> {
 
   String _getNextVaccineText(List<Reminder> vaccines) {
     final upcoming = vaccines.where((v) => v.nextDate != null && v.nextDate!.isAfter(DateTime.now())).toList();
-    if (upcoming.isEmpty) return vaccines.isEmpty ? 'Aşı kaydı ekle' : 'Yaklaşan aşı yok';
+    if (upcoming.isEmpty) return vaccines.isEmpty ? AppLocalizations.get('add_vaccine_record') : AppLocalizations.get('no_upcoming_vaccine');
     upcoming.sort((a, b) => a.nextDate!.compareTo(b.nextDate!));
-    return 'Sonraki: ${_getRelativeDate(upcoming.first.nextDate!)}';
+    return AppLocalizations.get('next_colon').replaceAll('{date}', _getRelativeDate(upcoming.first.nextDate!));
   }
 
   String _getNextMedicineText(List<Reminder> medicines) {
     final upcoming = medicines.where((m) => m.nextDate != null && m.nextDate!.isAfter(DateTime.now())).toList();
-    if (upcoming.isEmpty) return medicines.isEmpty ? 'Hatırlatıcı ekle' : 'Yaklaşan yok';
+    if (upcoming.isEmpty) return medicines.isEmpty ? AppLocalizations.get('add_reminder') : AppLocalizations.get('no_upcoming_short');
     upcoming.sort((a, b) => a.nextDate!.compareTo(b.nextDate!));
-    return 'Sonraki: ${_getRelativeDate(upcoming.first.nextDate!)}';
+    return AppLocalizations.get('next_colon').replaceAll('{date}', _getRelativeDate(upcoming.first.nextDate!));
   }
 }

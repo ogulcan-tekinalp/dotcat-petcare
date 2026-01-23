@@ -12,6 +12,7 @@ import '../../reminders/providers/completions_provider.dart';
 import '../../weight/providers/weight_provider.dart';
 import '../../reminders/presentation/add_reminder_screen.dart';
 import '../../weight/presentation/weight_screen.dart';
+import '../providers/insights_provider.dart' show markInsightsAsSeen, highPriorityInsightsCountProvider;
 
 /// Akıllı Öneriler Ekranı - Gerçek zamanlı güncel verilerle
 class InsightsScreen extends ConsumerStatefulWidget {
@@ -35,6 +36,11 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
     setState(() => _isLoading = true);
 
     try {
+      // Öneriler görüldü olarak işaretle (badge'i temizle)
+      await markInsightsAsSeen();
+      // Badge count'u yenile
+      ref.invalidate(highPriorityInsightsCountProvider);
+
       // Tüm verileri yeniden yükle
       await ref.read(remindersProvider.notifier).loadReminders();
 
@@ -72,9 +78,20 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
       completedDates: completions.completedDates,
     );
 
-    // Filter out snoozed AND dismissed insights
+    // Get delivered insight IDs - only show insights that were delivered via notification
+    final deliveredIds = await InsightsNotificationService.instance.getDeliveredInsightIds();
+
+    // Filter: only delivered, not snoozed, not dismissed
     final filteredInsights = <Insight>[];
     for (final insight in insights) {
+      // Check if delivered via notification (or high priority - always show urgent)
+      final isDelivered = deliveredIds.contains(insight.id);
+      final isHighPriority = insight.priority == InsightPriority.high;
+
+      if (!isDelivered && !isHighPriority) {
+        continue; // Skip non-delivered, non-urgent insights
+      }
+
       final isSnoozed = await InsightsNotificationService.instance.isInsightSnoozed(insight.id);
       final isDismissed = await InsightsNotificationService.instance.isInsightDismissed(insight.id);
 
@@ -243,10 +260,10 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
                             ),
                           ),
                         ),
-                        // Dismiss button
+                        // Options button (snooze/dismiss)
                         IconButton(
                           icon: Icon(Icons.close_rounded, size: 20, color: AppColors.textSecondary),
-                          onPressed: () => _dismissInsight(insight),
+                          onPressed: () => _showInsightOptions(context, insight),
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(),
                         ),
@@ -410,26 +427,17 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
               const SizedBox(height: 24),
               ListTile(
                 leading: const Icon(Icons.access_time, color: AppColors.info),
-                title: Text(AppLocalizations.get('snooze_3days')),
-                subtitle: Text(AppLocalizations.get('snooze_3days_subtitle')),
+                title: Text(AppLocalizations.get('snooze_1month')),
+                subtitle: Text(AppLocalizations.get('snooze_1month_subtitle')),
                 onTap: () {
                   Navigator.pop(context);
-                  _snoozeInsight(insight, days: 3);
+                  _snoozeInsight(insight, days: 30);
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.access_time, color: AppColors.warning),
-                title: Text(AppLocalizations.get('snooze_7days')),
-                subtitle: Text(AppLocalizations.get('snooze_7days_subtitle')),
-                onTap: () {
-                  Navigator.pop(context);
-                  _snoozeInsight(insight, days: 7);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.close, color: AppColors.error),
-                title: Text(AppLocalizations.get('dismiss_insight')),
-                subtitle: Text(AppLocalizations.get('dismiss_insight_subtitle')),
+                leading: const Icon(Icons.block, color: AppColors.error),
+                title: Text(AppLocalizations.get('dismiss_insight_permanent')),
+                subtitle: Text(AppLocalizations.get('dismiss_insight_permanent_subtitle')),
                 onTap: () {
                   Navigator.pop(context);
                   _dismissInsight(insight);
@@ -444,7 +452,14 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
   }
 
   Future<void> _snoozeInsight(Insight insight, {required int days}) async {
+    // Snooze the insight
     await InsightsNotificationService.instance.snoozeInsight(insight.id, days: days);
+
+    // Clear delivered status so it's hidden
+    await InsightsNotificationService.instance.clearDeliveredStatus(insight.id);
+
+    // Schedule a new notification for when snooze ends
+    await InsightsNotificationService.instance.scheduleSnoozeNotification(insight, days: days);
 
     if (!mounted) return;
 
@@ -461,7 +476,11 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
   }
 
   Future<void> _dismissInsight(Insight insight) async {
+    // Dismiss the insight (permanent until 30 days if action not taken)
     await InsightsNotificationService.instance.dismissInsight(insight.id);
+
+    // Clear delivered status
+    await InsightsNotificationService.instance.clearDeliveredStatus(insight.id);
 
     if (!mounted) return;
 

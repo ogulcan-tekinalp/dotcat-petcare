@@ -26,8 +26,10 @@ class OnboardingV2Screen extends ConsumerStatefulWidget {
 
 class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
   final PageController _pageController = PageController();
+  final ScrollController _welcomeScrollController = ScrollController();
   int _currentPage = 0;
-  final int _totalPages = 5; // 4'ten 5'e çıktı (pet type selection eklendi)
+  final int _totalPages = 5;
+  bool _showScrollIndicator = true;
 
   // Pet type selection
   PetType? _selectedPetType;
@@ -36,20 +38,32 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _weightController = TextEditingController();
-  DateTime _birthDate = DateTime.now().subtract(const Duration(days: 180)); // 6 ay
+  DateTime _birthDate = DateTime.now().subtract(const Duration(days: 180));
   String? _selectedGender;
-  String? _selectedBreed; // Köpek için
-  String? _selectedSize; // Köpek için
+  String? _selectedBreed;
+  String? _selectedSize;
   File? _photoFile;
   final _picker = ImagePicker();
 
   @override
   void initState() {
     super.initState();
-    // Name controller'a listener ekle - buton state'ini güncellemek için
     _nameController.addListener(() {
       if (mounted) setState(() {});
     });
+    _welcomeScrollController.addListener(_onWelcomeScroll);
+  }
+
+  void _onWelcomeScroll() {
+    if (_welcomeScrollController.hasClients) {
+      final maxScroll = _welcomeScrollController.position.maxScrollExtent;
+      final currentScroll = _welcomeScrollController.offset;
+      if (currentScroll > maxScroll * 0.3 && _showScrollIndicator) {
+        setState(() => _showScrollIndicator = false);
+      } else if (currentScroll < maxScroll * 0.1 && !_showScrollIndicator) {
+        setState(() => _showScrollIndicator = true);
+      }
+    }
   }
 
   @override
@@ -57,26 +71,45 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
     _pageController.dispose();
     _nameController.dispose();
     _weightController.dispose();
+    _welcomeScrollController.dispose();
     super.dispose();
   }
 
-  void _nextPage() {
-    // Dismiss keyboard before navigation
-    FocusScope.of(context).unfocus();
+  bool get _canProceedFromPetForm {
+    if (_nameController.text.trim().isEmpty) return false;
+    if (_selectedGender == null) return false;
+    return true;
+  }
 
+  void _nextPage() {
+    FocusScope.of(context).unfocus();
     HapticService.instance.tap();
+
     if (_currentPage < _totalPages - 1) {
-      // Sayfa 1'de (pet type selection) validasyonu
-      if (_currentPage == 1) {
-        if (_selectedPetType == null) {
+      if (_currentPage == 1 && _selectedPetType == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Lütfen bir evcil hayvan türü seçin'),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+        return;
+      }
+
+      if (_currentPage == 2) {
+        if (!_canProceedFromPetForm) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Lütfen bir evcil hayvan türü seçin')),
+            SnackBar(
+              content: const Text('Lütfen zorunlu alanları doldurun'),
+              backgroundColor: AppColors.error,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
           );
           return;
         }
-      }
-      // Sayfa 2'de (pet creation) form validasyonu
-      if (_currentPage == 2) {
         if (!_formKey.currentState!.validate()) {
           return;
         }
@@ -95,13 +128,11 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
     final prefs = await SharedPreferences.getInstance();
 
     try {
-      // Önce anonymous login yap (eğer giriş yapılmamışsa)
       final authService = ref.read(authServiceProvider);
       if (authService.currentUser == null) {
         await authService.signInAnonymously();
       }
 
-      // Kilo değerini parse et
       double? weight;
       if (_weightController.text.trim().isNotEmpty) {
         try {
@@ -112,7 +143,6 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
       }
 
       if (_selectedPetType == PetType.cat) {
-        // Kedi oluştur
         final cat = await ref.read(catsProvider.notifier).addCat(
           name: _nameController.text.trim(),
           birthDate: _birthDate,
@@ -121,11 +151,9 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
           photoPath: _photoFile?.path,
         );
 
-        // Preferences kaydet
         await prefs.setBool('hasSeenOnboarding', true);
         await prefs.setString('first_cat_id', cat.id);
 
-        // Kiloyu preference'a kaydet (insights için)
         if (weight != null) {
           await prefs.setDouble('onboarding_initial_weight', weight);
           await ref.read(weightProvider.notifier).addWeightRecord(
@@ -135,7 +163,6 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
           );
         }
 
-        // Kedi yaşına göre tip kaydet
         final ageInMonths = cat.ageInMonths;
         String catType = 'adult';
         if (ageInMonths < 12) {
@@ -145,7 +172,6 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
         }
         await prefs.setString('onboarding_cat_type', catType);
       } else if (_selectedPetType == PetType.dog) {
-        // Köpek oluştur
         final dog = await ref.read(dogsProvider.notifier).addDog(
           name: _nameController.text.trim(),
           birthDate: _birthDate,
@@ -156,21 +182,18 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
           photoPath: _photoFile?.path,
         );
 
-        // Preferences kaydet
         await prefs.setBool('hasSeenOnboarding', true);
         await prefs.setString('first_dog_id', dog.id);
 
-        // Kiloyu preference'a kaydet (insights için)
         if (weight != null) {
           await prefs.setDouble('onboarding_initial_weight', weight);
           await ref.read(weightProvider.notifier).addWeightRecord(
-            catId: dog.id, // Weight provider uses catId for both cats and dogs
+            catId: dog.id,
             weight: weight,
             notes: 'İlk kayıt (Onboarding)',
           );
         }
 
-        // Köpek yaşına göre tip kaydet
         final ageInMonths = dog.ageInMonths;
         String dogType = 'adult';
         if (ageInMonths < 12) {
@@ -183,7 +206,6 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
 
       if (!mounted) return;
 
-      // Login ekranına yönlendir
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -201,21 +223,55 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
   Future<void> _pickPhoto() async {
     final source = await showModalBottomSheet<ImageSource>(
       context: context,
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.photo_library),
-              title: const Text('Galeriden Seç'),
-              onTap: () => Navigator.pop(context, ImageSource.gallery),
-            ),
-            ListTile(
-              leading: const Icon(Icons.camera_alt),
-              title: const Text('Fotoğraf Çek'),
-              onTap: () => Navigator.pop(context, ImageSource.camera),
-            ),
-          ],
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: Theme.of(context).brightness == Brightness.dark
+              ? AppColors.surfaceDark
+              : Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 8),
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 20),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.photo_library, color: AppColors.primary),
+                ),
+                title: const Text('Galeriden Seç', style: TextStyle(fontWeight: FontWeight.w600)),
+                onTap: () => Navigator.pop(context, ImageSource.gallery),
+              ),
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppColors.secondary.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.camera_alt, color: AppColors.secondary),
+                ),
+                title: const Text('Fotoğraf Çek', style: TextStyle(fontWeight: FontWeight.w600)),
+                onTap: () => Navigator.pop(context, ImageSource.camera),
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
         ),
       ),
     );
@@ -229,7 +285,6 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
       );
 
       if (pickedFile != null) {
-        // Kırpma işlemi
         final croppedFile = await ImageCropper().cropImage(
           sourcePath: pickedFile.path,
           compressQuality: 90,
@@ -274,27 +329,14 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return GestureDetector(
-      onTap: () => FocusScope.of(context).unfocus(), // Dismiss keyboard on tap outside
+      onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
-        resizeToAvoidBottomInset: true, // Klavye açıldığında ekranı yukarı kaydır
-        body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              AppColors.primary.withOpacity(0.1),
-              Colors.white,
-            ],
-          ),
-        ),
-        child: SafeArea(
+        resizeToAvoidBottomInset: true,
+        backgroundColor: isDark ? AppColors.backgroundDark : const Color(0xFFF8FAFC),
+        body: SafeArea(
           child: Column(
             children: [
-              // Progress bar
-              _buildProgressBar(),
-
-              // Page content
+              _buildProgressBar(isDark),
               Expanded(
                 child: PageView(
                   controller: _pageController,
@@ -303,103 +345,154 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
                     setState(() => _currentPage = index);
                   },
                   children: [
-                    _buildWelcomePage(),
-                    _buildPetTypeSelectionPage(),
+                    _buildWelcomePage(isDark),
+                    _buildPetTypeSelectionPage(isDark),
                     _buildPetCreationPage(isDark),
-                    _buildNotificationPage(),
-                    _buildReadyPage(),
+                    _buildWeightPage(isDark),
+                    _buildReadyPage(isDark),
                   ],
                 ),
               ),
-
-              // Navigation
-              _buildNavigation(),
+              _buildNavigation(isDark),
             ],
           ),
         ),
-      ), // Close Scaffold
-      ), // Close GestureDetector
+      ),
     );
   }
 
-  Widget _buildProgressBar() {
+  Widget _buildProgressBar(bool isDark) {
     return Padding(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       child: Row(
         children: [
-          // Geri butonu
           if (_currentPage > 0)
-            IconButton(
-              onPressed: () => _pageController.previousPage(
-                duration: const Duration(milliseconds: 400),
-                curve: Curves.easeOutCubic,
+            GestureDetector(
+              onTap: () {
+                HapticService.instance.tap();
+                _pageController.previousPage(
+                  duration: const Duration(milliseconds: 400),
+                  curve: Curves.easeOutCubic,
+                );
+              },
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white.withOpacity(0.1) : Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: isDark ? [] : AppShadows.small,
+                ),
+                child: Icon(
+                  Icons.arrow_back_rounded,
+                  color: isDark ? Colors.white : AppColors.textPrimary,
+                  size: 20,
+                ),
               ),
-              icon: const Icon(Icons.arrow_back_rounded),
             )
           else
-            const SizedBox(width: 48),
+            const SizedBox(width: 40),
 
-          // Progress dots
           Expanded(
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: List.generate(_totalPages, (index) {
                 final isActive = index <= _currentPage;
+                final isCurrent = index == _currentPage;
                 return AnimatedContainer(
                   duration: const Duration(milliseconds: 300),
                   margin: const EdgeInsets.symmetric(horizontal: 4),
-                  width: index == _currentPage ? 24 : 8,
-                  height: 8,
+                  width: isCurrent ? 28 : 10,
+                  height: 10,
                   decoration: BoxDecoration(
-                    color: isActive ? AppColors.primary : Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(4),
+                    gradient: isActive
+                        ? LinearGradient(colors: [AppColors.primary, AppColors.primaryLight])
+                        : null,
+                    color: isActive ? null : (isDark ? Colors.white.withOpacity(0.2) : Colors.grey.shade300),
+                    borderRadius: BorderRadius.circular(5),
+                    boxShadow: isActive ? AppShadows.colored(AppColors.primary.withOpacity(0.3)) : [],
                   ),
                 );
               }),
             ),
           ),
 
-          const SizedBox(width: 48),
+          const SizedBox(width: 40),
         ],
       ),
     );
   }
 
-  Widget _buildNavigation() {
-    // Sayfa 1'de (pet type selection) pet seçilmemişse disable
-    // Sayfa 2'de (pet creation) form dolu değilse disable
+  Widget _buildNavigation(bool isDark) {
     bool canProceed = true;
+    String buttonText = 'Devam';
+
     if (_currentPage == 1 && _selectedPetType == null) {
       canProceed = false;
-    } else if (_currentPage == 2 && _nameController.text.trim().isEmpty) {
+    } else if (_currentPage == 2 && !_canProceedFromPetForm) {
       canProceed = false;
     }
 
-    return Padding(
+    if (_currentPage == _totalPages - 1) {
+      buttonText = 'Başla';
+    }
+
+    final bottomPadding = MediaQuery.of(context).viewInsets.bottom;
+    final isKeyboardOpen = bottomPadding > 0;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
       padding: EdgeInsets.only(
         left: 24,
         right: 24,
-        bottom: 24,
-        top: MediaQuery.of(context).viewInsets.bottom > 0 ? 12 : 24, // Klavye açıksa padding azalt
+        bottom: isKeyboardOpen ? 12 : 24,
+        top: isKeyboardOpen ? 8 : 16,
+      ),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.surfaceDark : Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, -5),
+          ),
+        ],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           SizedBox(
             width: double.infinity,
-            height: 50,
+            height: 56,
             child: ElevatedButton(
               onPressed: canProceed ? _nextPage : null,
-              child: Text(
-                _currentPage == _totalPages - 1 ? 'Başla' : 'Devam',
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: isDark ? Colors.white.withOpacity(0.1) : Colors.grey.shade300,
+                disabledForegroundColor: isDark ? Colors.white.withOpacity(0.3) : Colors.grey.shade500,
+                elevation: canProceed ? 4 : 0,
+                shadowColor: AppColors.primary.withOpacity(0.4),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    buttonText,
+                    style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                  ),
+                  if (canProceed) ...[
+                    const SizedBox(width: 8),
+                    const Icon(Icons.arrow_forward_rounded, size: 20),
+                  ],
+                ],
               ),
             ),
           ),
 
-          // "Zaten Hesabım Var" butonu - sadece ilk sayfada
-          if (_currentPage == 0) ...[
-            const SizedBox(height: 12),
+          if (_currentPage == 0 && !isKeyboardOpen) ...[
+            const SizedBox(height: 16),
             TextButton(
               onPressed: () {
                 Navigator.pushReplacement(
@@ -407,12 +500,13 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
                   MaterialPageRoute(builder: (_) => const LoginScreen()),
                 );
               },
-              child: Text(
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.primary,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              ),
+              child: const Text(
                 'Zaten Hesabım Var',
-                style: AppTypography.bodyLarge.copyWith(
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
               ),
             ),
           ],
@@ -423,45 +517,350 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
 
   // ============ PAGES ============
 
-  Widget _buildPetTypeSelectionPage() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+  Widget _buildWelcomePage(bool isDark) {
+    return Stack(
+      children: [
+        SingleChildScrollView(
+          controller: _welcomeScrollController,
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Column(
+            children: [
+              const SizedBox(height: 32),
 
+              // Logo with animated gradient ring
+              Container(
+                width: 130,
+                height: 130,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [AppColors.primary, AppColors.primaryLight],
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primary.withOpacity(0.4),
+                      blurRadius: 30,
+                      spreadRadius: 5,
+                    ),
+                  ],
+                ),
+                child: Center(
+                  child: Container(
+                    width: 110,
+                    height: 110,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: isDark ? AppColors.surfaceDark : Colors.white,
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(55),
+                      child: Image.asset(
+                        'assets/images/logo.png',
+                        width: 80,
+                        height: 80,
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                  ),
+                ),
+              ).animate()
+                .scale(duration: 700.ms, curve: Curves.elasticOut)
+                .fadeIn(duration: 400.ms),
+
+              const SizedBox(height: 36),
+
+              // Title with better contrast
+              Text(
+                'Evcil Hayvanınızın\nDijital Sağlık Asistanı',
+                style: TextStyle(
+                  fontSize: 30,
+                  fontWeight: FontWeight.w800,
+                  height: 1.2,
+                  color: isDark ? Colors.white : const Color(0xFF1E293B),
+                  letterSpacing: -0.5,
+                ),
+                textAlign: TextAlign.center,
+              ).animate().fadeIn(duration: 500.ms, delay: 200.ms).slideY(begin: 0.2, end: 0),
+
+              const SizedBox(height: 16),
+
+              // Subtitle with much better contrast
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(isDark ? 0.2 : 0.08),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  'Yapay zeka destekli öneriler ve akıllı hatırlatmalarla evcil hayvanınızın sağlığını takip edin',
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: isDark ? Colors.white.withOpacity(0.9) : const Color(0xFF475569),
+                    height: 1.5,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ).animate().fadeIn(duration: 500.ms, delay: 300.ms),
+
+              const SizedBox(height: 40),
+
+              // Feature cards with improved design
+              _buildFeatureCard(
+                icon: Icons.auto_awesome_rounded,
+                title: 'Akıllı Öneriler',
+                subtitle: 'Yapay zeka ile kişiselleştirilmiş sağlık tavsiyeleri alın',
+                gradient: [const Color(0xFF6366F1), const Color(0xFF8B5CF6)],
+                isDark: isDark,
+                delay: 400,
+              ),
+
+              const SizedBox(height: 16),
+
+              _buildFeatureCard(
+                icon: Icons.notifications_active_rounded,
+                title: 'Akıllı Hatırlatmalar',
+                subtitle: 'Aşı, ilaç ve bakım zamanlarını asla kaçırmayın',
+                gradient: [const Color(0xFF10B981), const Color(0xFF34D399)],
+                isDark: isDark,
+                delay: 500,
+              ),
+
+              const SizedBox(height: 16),
+
+              _buildFeatureCard(
+                icon: Icons.insights_rounded,
+                title: 'Sağlık Takibi',
+                subtitle: 'Kilo ve sağlık verilerini grafiklerle izleyin',
+                gradient: [const Color(0xFFF59E0B), const Color(0xFFFBBF24)],
+                isDark: isDark,
+                delay: 600,
+              ),
+
+              const SizedBox(height: 100),
+            ],
+          ),
+        ),
+
+        // Scroll indicator
+        if (_showScrollIndicator)
+          Positioned(
+            bottom: 20,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white.withOpacity(0.15) : Colors.black.withOpacity(0.7),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      color: Colors.white,
+                      size: 20,
+                    ).animate(onPlay: (c) => c.repeat(reverse: true))
+                      .moveY(begin: 0, end: 4, duration: 800.ms),
+                    const SizedBox(width: 6),
+                    const Text(
+                      'Kaydır',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ).animate().fadeIn(duration: 400.ms, delay: 1000.ms),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildFeatureCard({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required List<Color> gradient,
+    required bool isDark,
+    required int delay,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withOpacity(0.08) : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: isDark ? [] : AppShadows.medium,
+        border: Border.all(
+          color: isDark ? Colors.white.withOpacity(0.1) : gradient.first.withOpacity(0.2),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 60,
+            height: 60,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: gradient,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: gradient.first.withOpacity(0.4),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Icon(icon, color: Colors.white, size: 28),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : const Color(0xFF1E293B),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: isDark ? Colors.white.withOpacity(0.7) : const Color(0xFF64748B),
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ).animate().fadeIn(duration: 500.ms, delay: Duration(milliseconds: delay))
+      .slideX(begin: 0.1, end: 0);
+  }
+
+  Widget _buildPetTypeSelectionPage(bool isDark) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.only(left: 24, right: 24, top: 20, bottom: 100),
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'İlk Evcil Hayvanınızı Ekleyin',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          // Header
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  AppColors.primary.withOpacity(isDark ? 0.3 : 0.1),
+                  AppColors.primaryLight.withOpacity(isDark ? 0.2 : 0.05),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Column(
+              children: [
+                Icon(
+                  Icons.pets_rounded,
+                  size: 48,
+                  color: AppColors.primary,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'İlk Evcil Hayvanınızı Ekleyin',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : const Color(0xFF1E293B),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Hangi tür evcil hayvan eklemek istersiniz?',
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: isDark ? Colors.white.withOpacity(0.7) : const Color(0xFF64748B),
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 8),
-          Text(
-            'Hangi tür evcil hayvan eklemek istersiniz?',
-            style: TextStyle(color: Colors.grey.shade600),
-          ),
-          const SizedBox(height: 40),
 
-          // Cat option
+          const SizedBox(height: 32),
+
+          // Pet type options
           _buildPetTypeCard(
             petType: PetType.cat,
-            icon: '🐱',
+            emoji: '🐱',
             title: 'Kedi',
-            description: 'Kedim için profil oluştur',
+            description: 'Kedim için profil oluşturmak istiyorum',
             gradient: [AppColors.primary, AppColors.primaryLight],
             isDark: isDark,
-          ),
+          ).animate().fadeIn(duration: 400.ms, delay: 100.ms).slideY(begin: 0.1, end: 0),
+
           const SizedBox(height: 16),
 
-          // Dog option
           _buildPetTypeCard(
             petType: PetType.dog,
-            icon: '🐶',
+            emoji: '🐶',
             title: 'Köpek',
-            description: 'Köpeğim için profil oluştur',
-            gradient: [AppColors.secondary, AppColors.accent],
+            description: 'Köpeğim için profil oluşturmak istiyorum',
+            gradient: [AppColors.secondary, const Color(0xFF34D399)],
             isDark: isDark,
-          ),
+          ).animate().fadeIn(duration: 400.ms, delay: 200.ms).slideY(begin: 0.1, end: 0),
+
+          const SizedBox(height: 24),
+
+          // Info note
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: isDark ? Colors.white.withOpacity(0.05) : const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isDark ? Colors.white.withOpacity(0.1) : const Color(0xFFE2E8F0),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.info_outline_rounded,
+                  color: isDark ? Colors.white.withOpacity(0.6) : const Color(0xFF64748B),
+                  size: 20,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Daha sonra istediğiniz kadar evcil hayvan ekleyebilirsiniz.',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: isDark ? Colors.white.withOpacity(0.6) : const Color(0xFF64748B),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ).animate().fadeIn(duration: 400.ms, delay: 300.ms),
         ],
       ),
     );
@@ -469,7 +868,7 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
 
   Widget _buildPetTypeCard({
     required PetType petType,
-    required String icon,
+    required String emoji,
     required String title,
     required String description,
     required List<Color> gradient,
@@ -481,40 +880,60 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
       onTap: () {
         setState(() {
           _selectedPetType = petType;
-          // Reset form when pet type changes
           _selectedBreed = null;
           _selectedSize = null;
         });
         HapticService.instance.tap();
       },
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: isDark ? AppColors.surfaceDark : Colors.white,
+          color: isDark
+              ? (isSelected ? gradient.first.withOpacity(0.2) : Colors.white.withOpacity(0.08))
+              : (isSelected ? gradient.first.withOpacity(0.08) : Colors.white),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isSelected ? gradient.first : (isDark ? Colors.grey.shade700 : Colors.grey.shade300),
-            width: isSelected ? 3 : 1,
+            color: isSelected ? gradient.first : (isDark ? Colors.white.withOpacity(0.1) : const Color(0xFFE2E8F0)),
+            width: isSelected ? 2.5 : 1,
           ),
           boxShadow: isSelected
-              ? AppShadows.colored(gradient.first)
-              : AppShadows.medium,
+              ? [
+                  BoxShadow(
+                    color: gradient.first.withOpacity(0.3),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8),
+                  ),
+                ]
+              : (isDark ? [] : AppShadows.small),
         ),
         child: Row(
           children: [
             Container(
-              width: 70,
-              height: 70,
+              width: 72,
+              height: 72,
               decoration: BoxDecoration(
-                gradient: LinearGradient(colors: gradient),
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: isSelected ? AppShadows.colored(gradient.first) : [],
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: isSelected ? gradient : [Colors.grey.shade200, Colors.grey.shade300],
+                ),
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: isSelected
+                    ? [
+                        BoxShadow(
+                          color: gradient.first.withOpacity(0.4),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ]
+                    : [],
               ),
               child: Center(
-                child: Text(icon, style: const TextStyle(fontSize: 40)),
+                child: Text(emoji, style: const TextStyle(fontSize: 36)),
               ),
             ),
-            const SizedBox(width: 20),
+            const SizedBox(width: 16),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -524,7 +943,9 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
-                      color: isSelected ? gradient.first : (isDark ? Colors.white : Colors.grey.shade800),
+                      color: isSelected
+                          ? gradient.first
+                          : (isDark ? Colors.white : const Color(0xFF1E293B)),
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -532,164 +953,37 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
                     description,
                     style: TextStyle(
                       fontSize: 14,
-                      color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+                      color: isDark ? Colors.white.withOpacity(0.6) : const Color(0xFF64748B),
                     ),
                   ),
                 ],
               ),
             ),
-            if (isSelected)
-              Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: gradient.first,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.check, color: Colors.white, size: 20),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildWelcomePage() {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            AppColors.primary.withOpacity(0.05),
-            AppColors.secondary.withOpacity(0.05),
-          ],
-        ),
-      ),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
-        child: Column(
-          children: [
-            const SizedBox(height: 40),
-
-            // Animated logo with glow effect
-            Container(
-              width: 140,
-              height: 140,
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 250),
+              width: 28,
+              height: 28,
               decoration: BoxDecoration(
+                color: isSelected ? gradient.first : Colors.transparent,
                 shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  colors: [AppColors.primary, AppColors.primaryLight],
+                border: Border.all(
+                  color: isSelected ? gradient.first : (isDark ? Colors.white.withOpacity(0.3) : Colors.grey.shade300),
+                  width: 2,
                 ),
-                boxShadow: AppShadows.colored(AppColors.primary),
               ),
-              child: const Icon(Icons.pets_rounded, size: 70, color: Colors.white),
-            ).animate()
-              .scale(duration: 800.ms, curve: Curves.elasticOut)
-              .shimmer(duration: 1500.ms, delay: 500.ms),
-
-            const SizedBox(height: 40),
-
-            // Modern title with gradient
-            ShaderMask(
-              shaderCallback: (bounds) => LinearGradient(
-                colors: [AppColors.primary, AppColors.primaryLight],
-              ).createShader(bounds),
-              child: Text(
-                'Evcil Hayvanınızın\nDijital Sağlık Asistanı',
-                style: AppTypography.displayLarge.copyWith(color: Colors.white),
-                textAlign: TextAlign.center,
-              ),
-            ).animate().fadeIn(duration: 600.ms).slideY(begin: 0.3, end: 0),
-
-            const SizedBox(height: 16),
-
-            // Subtitle with better contrast
-            Text(
-              'Yapay zeka destekli öneriler ve akıllı hatırlatmalarla\nevcil hayvanınızın sağlığını takip edin',
-              style: AppTypography.bodyLarge.copyWith(
-                color: Colors.grey.shade800,
-                fontWeight: FontWeight.w500,
-                height: 1.6,
-              ),
-              textAlign: TextAlign.center,
-            ).animate().fadeIn(delay: 300.ms, duration: 600.ms),
-
-            const SizedBox(height: 56),
-
-            // Modern feature cards with glassmorphism
-            _buildModernFeatureCard(
-              Icons.auto_awesome,
-              'Akıllı Öneriler',
-              'Yapay zeka ile kişiselleştirilmiş\nsağlık tavsiyeleri',
-              [AppColors.primary, AppColors.primaryLight],
-            ),
-            const SizedBox(height: 16),
-            _buildModernFeatureCard(
-              Icons.notifications_active_rounded,
-              'Hatırlatıcılar',
-              'Aşı, ilaç ve bakım zamanlarını\nasla kaçırmayın',
-              [AppColors.secondary, AppColors.vaccine],
-            ),
-            const SizedBox(height: 16),
-            _buildModernFeatureCard(
-              Icons.analytics_rounded,
-              'Kilo Takibi',
-              'Grafik ve trendlerle sağlıklı\nkilo aralığını koruyun',
-              [AppColors.accent, AppColors.warning],
+              child: isSelected
+                  ? const Icon(Icons.check, color: Colors.white, size: 18)
+                  : null,
             ),
           ],
         ),
       ),
     );
-  }
-
-  Widget _buildModernFeatureCard(IconData icon, String title, String subtitle, List<Color> gradientColors) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: AppShadows.medium,
-        border: Border.all(color: Colors.grey.shade100),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(colors: gradientColors),
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: AppShadows.colored(gradientColors.first),
-            ),
-            child: Icon(icon, color: Colors.white, size: 28),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: AppTypography.titleMedium),
-                const SizedBox(height: 4),
-                Text(
-                  subtitle,
-                  style: AppTypography.bodySmall.copyWith(
-                    color: Colors.grey.shade700,
-                    fontWeight: FontWeight.w500,
-                    height: 1.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    ).animate().fadeIn(duration: 600.ms).slideX(begin: 0.2, end: 0);
   }
 
   Widget _buildPetCreationPage(bool isDark) {
     final isCat = _selectedPetType == PetType.cat;
-    final petName = isCat ? 'Kedi' : 'Köpek';
+    final petNamePossessive = isCat ? 'Kediniz' : 'Köpeğiniz';
 
     return SingleChildScrollView(
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
@@ -699,207 +993,420 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
 
-            // Title
-            Text(
-              'İlk ${petName}inizi Ekleyin',
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            // Header
+            Center(
+              child: Column(
+                children: [
+                  Text(
+                    'İlk $petNamePossessive Ekleyin',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.white : const Color(0xFF1E293B),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '$petNamePossessive hakkında birkaç bilgi alarak başlayalım',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: isDark ? Colors.white.withOpacity(0.6) : const Color(0xFF64748B),
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              '${petName}iniz hakkında birkaç bilgi alarak başlayalım',
-              style: TextStyle(color: Colors.grey.shade600),
-            ),
-            const SizedBox(height: 32),
 
-            // Photo
+            const SizedBox(height: 28),
+
+            // Photo picker
             Center(
               child: GestureDetector(
                 onTap: _pickPhoto,
-                child: Container(
-                  width: 100,
-                  height: 100,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade200,
-                    shape: BoxShape.circle,
-                    image: _photoFile != null
-                        ? DecorationImage(image: FileImage(_photoFile!), fit: BoxFit.cover)
-                        : null,
-                  ),
-                  child: _photoFile == null
-                      ? Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.add_a_photo, color: Colors.grey.shade600),
-                            const SizedBox(height: 4),
-                            Text('Fotoğraf', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
-                          ],
-                        )
-                      : null,
-                ),
-              ),
-            ),
-            const SizedBox(height: 32),
-
-            // Name
-            Text('İsim *', style: const TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 8),
-            TextFormField(
-              controller: _nameController,
-              textInputAction: TextInputAction.next,
-              decoration: InputDecoration(
-                hintText: '${petName}inizin adı',
-                filled: true,
-                fillColor: isDark ? AppColors.surfaceDark : Colors.white,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-              ),
-              validator: (v) => v == null || v.trim().isEmpty ? 'İsim gerekli' : null,
-            ),
-            const SizedBox(height: 20),
-
-            // Breed (Dog only)
-            if (!isCat) ...[
-              Text('Irk', style: const TextStyle(fontWeight: FontWeight.w600)),
-              const SizedBox(height: 8),
-              Autocomplete<String>(
-                optionsBuilder: (textEditingValue) {
-                  if (textEditingValue.text.isEmpty) {
-                    return const Iterable<String>.empty();
-                  }
-                  return AppConstants.dogBreeds.where((breed) =>
-                      breed.toLowerCase().contains(textEditingValue.text.toLowerCase()));
-                },
-                onSelected: (selection) {
-                  setState(() => _selectedBreed = selection);
-                },
-                fieldViewBuilder: (context, controller, focusNode, onSubmitted) {
-                  return TextFormField(
-                    controller: controller,
-                    focusNode: focusNode,
-                    textInputAction: TextInputAction.next,
-                    decoration: InputDecoration(
-                      hintText: 'Köpeğinizin ırkı',
-                      filled: true,
-                      fillColor: isDark ? AppColors.surfaceDark : Colors.white,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    onChanged: (value) => _selectedBreed = value,
-                  );
-                },
-              ),
-              const SizedBox(height: 20),
-
-              // Size (Dog only)
-              Text('Boyut', style: const TextStyle(fontWeight: FontWeight.w600)),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: AppConstants.dogSizes.map((size) {
-                  final isSelected = _selectedSize == size;
-                  return GestureDetector(
-                    onTap: () => setState(() => _selectedSize = size),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: isSelected ? AppColors.primary.withOpacity(0.1) : Colors.white,
-                        border: Border.all(
-                          color: isSelected ? AppColors.primary : Colors.grey.shade300,
-                          width: isSelected ? 2 : 1,
-                        ),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        size,
-                        style: TextStyle(
-                          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                          color: isSelected ? AppColors.primary : Colors.grey.shade700,
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 20),
-            ],
-
-            // Birth Date
-            Text('Doğum Tarihi', style: const TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 8),
-            InkWell(
-              onTap: () async {
-                final date = await showDatePicker(
-                  context: context,
-                  initialDate: _birthDate,
-                  firstDate: DateTime(2000),
-                  lastDate: DateTime.now(),
-                );
-                if (date != null) {
-                  setState(() => _birthDate = date);
-                }
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                decoration: BoxDecoration(
-                  color: isDark ? AppColors.surfaceDark : Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.shade300),
-                ),
-                child: Row(
+                child: Stack(
                   children: [
-                    const Icon(Icons.calendar_today, size: 20),
-                    const SizedBox(width: 12),
-                    Text('${_birthDate.day}/${_birthDate.month}/${_birthDate.year}'),
+                    Container(
+                      width: 110,
+                      height: 110,
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.white.withOpacity(0.1) : Colors.grey.shade100,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: _photoFile != null
+                              ? AppColors.primary
+                              : (isDark ? Colors.white.withOpacity(0.2) : Colors.grey.shade300),
+                          width: _photoFile != null ? 3 : 2,
+                        ),
+                        image: _photoFile != null
+                            ? DecorationImage(image: FileImage(_photoFile!), fit: BoxFit.cover)
+                            : null,
+                        boxShadow: _photoFile != null
+                            ? [
+                                BoxShadow(
+                                  color: AppColors.primary.withOpacity(0.3),
+                                  blurRadius: 16,
+                                  offset: const Offset(0, 6),
+                                ),
+                              ]
+                            : [],
+                      ),
+                      child: _photoFile == null
+                          ? Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.add_a_photo_rounded,
+                                  color: isDark ? Colors.white.withOpacity(0.5) : Colors.grey.shade500,
+                                  size: 28,
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  'Fotoğraf',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: isDark ? Colors.white.withOpacity(0.5) : Colors.grey.shade600,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            )
+                          : null,
+                    ),
+                    if (_photoFile != null)
+                      Positioned(
+                        right: 0,
+                        bottom: 0,
+                        child: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: isDark ? AppColors.surfaceDark : Colors.white, width: 2),
+                          ),
+                          child: const Icon(Icons.edit, color: Colors.white, size: 16),
+                        ),
+                      ),
                   ],
                 ),
               ),
             ),
+
+            const SizedBox(height: 28),
+
+            // Name field
+            _buildFormSection(
+              title: 'İsim',
+              isRequired: true,
+              isDark: isDark,
+              child: TextFormField(
+                controller: _nameController,
+                textInputAction: TextInputAction.next,
+                style: TextStyle(
+                  fontSize: 16,
+                  color: isDark ? Colors.white : const Color(0xFF1E293B),
+                ),
+                decoration: _inputDecoration(
+                  hint: '${petNamePossessive}in adı',
+                  icon: Icons.pets_rounded,
+                  isDark: isDark,
+                ),
+                validator: (v) => v == null || v.trim().isEmpty ? 'İsim gerekli' : null,
+              ),
+            ),
+
+            // Breed (Dog only)
+            if (!isCat) ...[
+              const SizedBox(height: 20),
+              _buildFormSection(
+                title: 'Irk',
+                isRequired: false,
+                isDark: isDark,
+                child: Autocomplete<String>(
+                  optionsBuilder: (textEditingValue) {
+                    if (textEditingValue.text.isEmpty) {
+                      return const Iterable<String>.empty();
+                    }
+                    return AppConstants.dogBreeds.where((breed) =>
+                        breed.toLowerCase().contains(textEditingValue.text.toLowerCase()));
+                  },
+                  onSelected: (selection) {
+                    setState(() => _selectedBreed = selection);
+                  },
+                  fieldViewBuilder: (context, controller, focusNode, onSubmitted) {
+                    return TextFormField(
+                      controller: controller,
+                      focusNode: focusNode,
+                      textInputAction: TextInputAction.next,
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: isDark ? Colors.white : const Color(0xFF1E293B),
+                      ),
+                      decoration: _inputDecoration(
+                        hint: 'Köpeğinizin ırkı',
+                        icon: Icons.category_rounded,
+                        isDark: isDark,
+                      ),
+                      onChanged: (value) => _selectedBreed = value,
+                    );
+                  },
+                ),
+              ),
+
+              // Size (Dog only)
+              const SizedBox(height: 20),
+              _buildFormSection(
+                title: 'Boyut',
+                isRequired: false,
+                isDark: isDark,
+                child: Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: AppConstants.dogSizes.map((size) {
+                    final isSelected = _selectedSize == size;
+                    return GestureDetector(
+                      onTap: () {
+                        setState(() => _selectedSize = size);
+                        HapticService.instance.tap();
+                      },
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? AppColors.primary.withOpacity(isDark ? 0.3 : 0.1)
+                              : (isDark ? Colors.white.withOpacity(0.08) : Colors.white),
+                          border: Border.all(
+                            color: isSelected ? AppColors.primary : (isDark ? Colors.white.withOpacity(0.2) : Colors.grey.shade300),
+                            width: isSelected ? 2 : 1,
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          size,
+                          style: TextStyle(
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                            color: isSelected
+                                ? AppColors.primary
+                                : (isDark ? Colors.white.withOpacity(0.8) : const Color(0xFF475569)),
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ],
+
+            // Birth Date
             const SizedBox(height: 20),
+            _buildFormSection(
+              title: 'Doğum Tarihi',
+              isRequired: false,
+              isDark: isDark,
+              child: InkWell(
+                onTap: () async {
+                  final date = await showDatePicker(
+                    context: context,
+                    initialDate: _birthDate,
+                    firstDate: DateTime(2000),
+                    lastDate: DateTime.now(),
+                    builder: (context, child) {
+                      return Theme(
+                        data: Theme.of(context).copyWith(
+                          colorScheme: ColorScheme.fromSeed(
+                            seedColor: AppColors.primary,
+                            brightness: isDark ? Brightness.dark : Brightness.light,
+                          ),
+                        ),
+                        child: child!,
+                      );
+                    },
+                  );
+                  if (date != null) {
+                    setState(() => _birthDate = date);
+                  }
+                },
+                borderRadius: BorderRadius.circular(14),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.white.withOpacity(0.08) : Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: isDark ? Colors.white.withOpacity(0.2) : Colors.grey.shade300),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.calendar_today_rounded,
+                        size: 20,
+                        color: AppColors.primary,
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        '${_birthDate.day}/${_birthDate.month}/${_birthDate.year}',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: isDark ? Colors.white : const Color(0xFF1E293B),
+                        ),
+                      ),
+                      const Spacer(),
+                      Icon(
+                        Icons.arrow_drop_down_rounded,
+                        color: isDark ? Colors.white.withOpacity(0.5) : Colors.grey.shade500,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
 
             // Gender
-            Text('Cinsiyet', style: const TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(child: _buildGenderOption('male', 'Erkek', Icons.male)),
-                const SizedBox(width: 12),
-                Expanded(child: _buildGenderOption('female', 'Dişi', Icons.female)),
-                const SizedBox(width: 12),
-                Expanded(child: _buildGenderOption('unknown', 'Bilinmiyor', Icons.help_outline)),
-              ],
+            const SizedBox(height: 20),
+            _buildFormSection(
+              title: 'Cinsiyet',
+              isRequired: true,
+              isDark: isDark,
+              child: Row(
+                children: [
+                  Expanded(child: _buildGenderOption('male', 'Erkek', Icons.male_rounded, isDark)),
+                  const SizedBox(width: 12),
+                  Expanded(child: _buildGenderOption('female', 'Dişi', Icons.female_rounded, isDark)),
+                  const SizedBox(width: 12),
+                  Expanded(child: _buildGenderOption('unknown', 'Bilinmiyor', Icons.help_outline_rounded, isDark)),
+                ],
+              ),
             ),
-            const SizedBox(height: 32),
+
+            const SizedBox(height: 100),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildGenderOption(String value, String label, IconData icon) {
+  Widget _buildFormSection({
+    required String title,
+    required bool isRequired,
+    required bool isDark,
+    required Widget child,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: isDark ? Colors.white : const Color(0xFF1E293B),
+              ),
+            ),
+            if (isRequired) ...[
+              const SizedBox(width: 4),
+              Text(
+                '*',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.error,
+                ),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 10),
+        child,
+      ],
+    );
+  }
+
+  InputDecoration _inputDecoration({
+    required String hint,
+    required IconData icon,
+    required bool isDark,
+  }) {
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: TextStyle(
+        color: isDark ? Colors.white.withOpacity(0.4) : Colors.grey.shade500,
+      ),
+      prefixIcon: Icon(icon, color: AppColors.primary, size: 22),
+      filled: true,
+      fillColor: isDark ? Colors.white.withOpacity(0.08) : Colors.white,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(color: isDark ? Colors.white.withOpacity(0.2) : Colors.grey.shade300),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(color: isDark ? Colors.white.withOpacity(0.2) : Colors.grey.shade300),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: AppColors.primary, width: 2),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide(color: AppColors.error),
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+    );
+  }
+
+  Widget _buildGenderOption(String value, String label, IconData icon, bool isDark) {
     final isSelected = _selectedGender == value;
+
+    Color getGenderColor() {
+      if (!isSelected) return isDark ? Colors.white.withOpacity(0.5) : Colors.grey.shade600;
+      switch (value) {
+        case 'male':
+          return const Color(0xFF3B82F6);
+        case 'female':
+          return const Color(0xFFEC4899);
+        default:
+          return AppColors.primary;
+      }
+    }
+
     return GestureDetector(
-      onTap: () => setState(() => _selectedGender = value),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
+      onTap: () {
+        setState(() => _selectedGender = value);
+        HapticService.instance.tap();
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.primary.withOpacity(0.1) : Colors.white,
+          color: isSelected
+              ? getGenderColor().withOpacity(isDark ? 0.25 : 0.1)
+              : (isDark ? Colors.white.withOpacity(0.08) : Colors.white),
           border: Border.all(
-            color: isSelected ? AppColors.primary : Colors.grey.shade300,
+            color: isSelected ? getGenderColor() : (isDark ? Colors.white.withOpacity(0.2) : Colors.grey.shade300),
             width: isSelected ? 2 : 1,
           ),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
         ),
         child: Column(
           children: [
-            Icon(icon, color: isSelected ? AppColors.primary : Colors.grey.shade600, size: 24),
-            const SizedBox(height: 4),
+            Icon(
+              icon,
+              color: getGenderColor(),
+              size: 26,
+            ),
+            const SizedBox(height: 6),
             Text(
               label,
               style: TextStyle(
-                fontSize: 12,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                color: isSelected ? AppColors.primary : Colors.grey.shade700,
+                fontSize: 13,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                color: isSelected
+                    ? getGenderColor()
+                    : (isDark ? Colors.white.withOpacity(0.7) : const Color(0xFF64748B)),
               ),
             ),
           ],
@@ -908,9 +1415,9 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
     );
   }
 
-  Widget _buildNotificationPage() {
+  Widget _buildWeightPage(bool isDark) {
     final isCat = _selectedPetType == PetType.cat;
-    final petName = isCat ? 'Kedi' : 'Köpek';
+    final petNamePossessive = isCat ? 'Kediniz' : 'Köpeğiniz';
 
     return SingleChildScrollView(
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
@@ -920,180 +1427,360 @@ class _OnboardingV2ScreenState extends ConsumerState<OnboardingV2Screen> {
         children: [
           const SizedBox(height: 20),
 
-          const Text(
-            'Kilo Bilgisi (Opsiyonel)',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+          // Header with icon
+          Center(
+            child: Column(
+              children: [
+                Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [AppColors.weight, AppColors.weight.withOpacity(0.7)],
+                    ),
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.weight.withOpacity(0.4),
+                        blurRadius: 20,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(Icons.monitor_weight_rounded, color: Colors.white, size: 40),
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  'Kilo Bilgisi',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : const Color(0xFF1E293B),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.info.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    'Opsiyonel',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.info,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  '${petNamePossessive}in mevcut kilosunu girin.\nBu bilgi sağlık önerileri için kullanılacak.',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: isDark ? Colors.white.withOpacity(0.6) : const Color(0xFF64748B),
+                    height: 1.5,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 8),
-          Text(
-            '${petName}inizin mevcut kilosunu girin. Bu bilgi sağlık önerileri için kullanılacak.',
-            style: TextStyle(color: Colors.grey.shade600),
-          ),
-          const SizedBox(height: 32),
 
-          // Weight input
+          const SizedBox(height: 36),
+
+          // Weight input card
           Container(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border.all(color: Colors.grey.shade300),
-              borderRadius: BorderRadius.circular(16),
+              color: isDark ? Colors.white.withOpacity(0.08) : Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: isDark ? Colors.white.withOpacity(0.1) : Colors.grey.shade200,
+              ),
+              boxShadow: isDark ? [] : AppShadows.medium,
             ),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(Icons.monitor_weight, color: AppColors.primary),
-                    ),
-                    const SizedBox(width: 16),
-                    const Text(
-                      'Kilo (kg)',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
                 TextFormField(
                   controller: _weightController,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   textInputAction: TextInputAction.done,
                   onFieldSubmitted: (_) => FocusScope.of(context).unfocus(),
-                  style: const TextStyle(fontSize: 18),
-                  decoration: InputDecoration(
-                    hintText: 'Örn: 4.5',
-                    suffixText: 'kg',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: AppColors.primary, width: 2),
-                    ),
+                  style: TextStyle(
+                    fontSize: 32,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white : const Color(0xFF1E293B),
                   ),
+                  textAlign: TextAlign.center,
+                  decoration: InputDecoration(
+                    hintText: '0.0',
+                    hintStyle: TextStyle(
+                      color: isDark ? Colors.white.withOpacity(0.3) : Colors.grey.shade400,
+                    ),
+                    suffixText: 'kg',
+                    suffixStyle: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? Colors.white.withOpacity(0.5) : Colors.grey.shade600,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide.none,
+                    ),
+                    filled: true,
+                    fillColor: isDark ? Colors.white.withOpacity(0.05) : const Color(0xFFF8FAFC),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // Quick weight buttons
+                Text(
+                  'Hızlı Seçim',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white.withOpacity(0.5) : Colors.grey.shade600,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  alignment: WrapAlignment.center,
+                  children: (isCat ? ['3', '4', '5', '6'] : ['5', '10', '15', '20', '25', '30'])
+                      .map((weight) => GestureDetector(
+                            onTap: () {
+                              setState(() => _weightController.text = weight);
+                              HapticService.instance.tap();
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: _weightController.text == weight
+                                    ? AppColors.weight.withOpacity(0.2)
+                                    : (isDark ? Colors.white.withOpacity(0.1) : const Color(0xFFF1F5F9)),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: _weightController.text == weight
+                                      ? AppColors.weight
+                                      : Colors.transparent,
+                                  width: 1.5,
+                                ),
+                              ),
+                              child: Text(
+                                '$weight kg',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: _weightController.text == weight
+                                      ? AppColors.weight
+                                      : (isDark ? Colors.white.withOpacity(0.7) : const Color(0xFF64748B)),
+                                ),
+                              ),
+                            ),
+                          ))
+                      .toList(),
                 ),
               ],
             ),
           ),
 
           const SizedBox(height: 24),
+
+          // Info note
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.blue.shade50,
-              borderRadius: BorderRadius.circular(12),
+              color: AppColors.info.withOpacity(isDark ? 0.15 : 0.08),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.info.withOpacity(0.3)),
             ),
             child: Row(
               children: [
-                Icon(Icons.info_outline, color: Colors.blue.shade700),
-                const SizedBox(width: 12),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.info.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(Icons.lightbulb_outline_rounded, color: AppColors.info, size: 20),
+                ),
+                const SizedBox(width: 14),
                 Expanded(
                   child: Text(
-                    'Kilo bilgisini boş bırakabilirsiniz. Daha sonra ekleyebilir veya güncelleyebilirsiniz.',
-                    style: TextStyle(fontSize: 13, color: Colors.blue.shade700),
+                    'Bu adımı atlayabilirsiniz. Kilo bilgisini daha sonra da ekleyebilirsiniz.',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: isDark ? Colors.white.withOpacity(0.8) : const Color(0xFF1E40AF),
+                      height: 1.4,
+                    ),
                   ),
                 ),
               ],
             ),
           ),
+
+          const SizedBox(height: 100),
         ],
       ),
     );
   }
 
-  Widget _buildReadyPage() {
+  Widget _buildReadyPage(bool isDark) {
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(
         children: [
           const SizedBox(height: 40),
 
+          // Success animation
           Container(
-            width: 120,
-            height: 120,
+            width: 130,
+            height: 130,
             decoration: BoxDecoration(
-              color: AppColors.success.withOpacity(0.1),
+              gradient: LinearGradient(
+                colors: [AppColors.success, AppColors.success.withOpacity(0.8)],
+              ),
               shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.success.withOpacity(0.4),
+                  blurRadius: 30,
+                  spreadRadius: 5,
+                ),
+              ],
             ),
-            child: const Icon(Icons.check_circle_rounded, size: 60, color: AppColors.success),
-          ).animate().scale(duration: 600.ms, curve: Curves.elasticOut),
+            child: const Icon(Icons.check_rounded, size: 70, color: Colors.white),
+          ).animate()
+            .scale(duration: 600.ms, curve: Curves.elasticOut)
+            .fadeIn(duration: 300.ms),
 
           const SizedBox(height: 32),
 
-          const Text(
-            'Her Şey Hazır! 🎉',
-            style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 16),
+          Text(
+            'Her Şey Hazır!',
+            style: TextStyle(
+              fontSize: 30,
+              fontWeight: FontWeight.bold,
+              color: isDark ? Colors.white : const Color(0xFF1E293B),
+            ),
+          ).animate().fadeIn(duration: 400.ms, delay: 200.ms),
+
+          const SizedBox(height: 12),
+
           Text(
             _nameController.text.trim().isEmpty
                 ? 'Evcil hayvanınız için en iyi bakımı sunmaya hazırsınız!'
                 : '${_nameController.text} için en iyi bakımı sunmaya hazırsınız!',
-            style: TextStyle(fontSize: 16, color: Colors.grey.shade600),
+            style: TextStyle(
+              fontSize: 16,
+              color: isDark ? Colors.white.withOpacity(0.7) : const Color(0xFF64748B),
+              height: 1.5,
+            ),
             textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 48),
+          ).animate().fadeIn(duration: 400.ms, delay: 300.ms),
+
+          const SizedBox(height: 40),
+
+          // Summary cards
+          _buildSummaryCard(
+            icon: Icons.pets_rounded,
+            iconColor: AppColors.primary,
+            title: _selectedPetType == PetType.cat ? 'Kedi' : 'Köpek',
+            value: _nameController.text.trim().isEmpty ? 'İsimsiz' : _nameController.text,
+            isDark: isDark,
+          ).animate().fadeIn(duration: 400.ms, delay: 400.ms).slideY(begin: 0.2, end: 0),
+
+          const SizedBox(height: 12),
 
           _buildSummaryCard(
-            Icons.pets,
-            _selectedPetType == PetType.cat ? 'Kedi Bilgileri' : 'Köpek Bilgileri',
-            _nameController.text.trim().isEmpty ? 'Henüz eklenmedi' : _nameController.text,
-          ),
-          const SizedBox(height: 16),
-          if (_weightController.text.trim().isNotEmpty)
-            _buildSummaryCard(
-              Icons.monitor_weight,
-              'Kilo',
-              '${_weightController.text.trim()} kg',
-            ),
-          if (_weightController.text.trim().isEmpty)
-            _buildSummaryCard(
-              Icons.monitor_weight,
-              'Kilo',
-              'Belirtilmedi (Sonra eklenebilir)',
-            ),
+            icon: Icons.cake_rounded,
+            iconColor: AppColors.accent,
+            title: 'Doğum Tarihi',
+            value: '${_birthDate.day}/${_birthDate.month}/${_birthDate.year}',
+            isDark: isDark,
+          ).animate().fadeIn(duration: 400.ms, delay: 500.ms).slideY(begin: 0.2, end: 0),
+
+          const SizedBox(height: 12),
+
+          _buildSummaryCard(
+            icon: Icons.monitor_weight_rounded,
+            iconColor: AppColors.weight,
+            title: 'Kilo',
+            value: _weightController.text.trim().isEmpty
+                ? 'Henüz eklenmedi'
+                : '${_weightController.text.trim()} kg',
+            isDark: isDark,
+          ).animate().fadeIn(duration: 400.ms, delay: 600.ms).slideY(begin: 0.2, end: 0),
+
+          const SizedBox(height: 100),
         ],
       ),
     );
   }
 
-  Widget _buildSummaryCard(IconData icon, String title, String value) {
+  Widget _buildSummaryCard({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String value,
+    required bool isDark,
+  }) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-          ),
-        ],
+        color: isDark ? Colors.white.withOpacity(0.08) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? Colors.white.withOpacity(0.1) : Colors.grey.shade200,
+        ),
+        boxShadow: isDark ? [] : AppShadows.small,
       ),
       child: Row(
         children: [
-          Icon(icon, color: AppColors.primary),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: iconColor.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: iconColor, size: 22),
+          ),
           const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
-                const SizedBox(height: 4),
-                Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: isDark ? Colors.white.withOpacity(0.5) : const Color(0xFF64748B),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? Colors.white : const Color(0xFF1E293B),
+                  ),
+                ),
               ],
             ),
+          ),
+          Icon(
+            Icons.check_circle_rounded,
+            color: AppColors.success,
+            size: 22,
           ),
         ],
       ),
     );
   }
-
 }

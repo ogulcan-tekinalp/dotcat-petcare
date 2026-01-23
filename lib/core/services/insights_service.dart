@@ -150,8 +150,8 @@ class InsightsService {
       }
     }
 
-    // Genel insights
-    insights.addAll(_generateGeneralInsights(cats, reminders, dogs));
+    // Genel insights (completedDates ile birlikte)
+    insights.addAll(_generateGeneralInsights(cats, reminders, dogs, completedDates: completedDates));
 
     // Mevsimsel insights
     insights.addAll(generateSeasonalInsights(cats, dogs));
@@ -205,8 +205,8 @@ class InsightsService {
         title: AppLocalizations.get('insight_underweight_title').replaceAll('{petName}', cat.name),
         description: AppLocalizations.get('insight_underweight_description')
             .replaceAll('{weight}', currentWeight.toStringAsFixed(1))
-            .replaceAll('{min}', idealRange.min.toStringAsFixed(1))
-            .replaceAll('{max}', idealRange.max.toStringAsFixed(1)),
+            .replaceAll('{minWeight}', idealRange.min.toStringAsFixed(1))
+            .replaceAll('{maxWeight}', idealRange.max.toStringAsFixed(1)),
         icon: Icons.trending_down_rounded,
         color: AppColors.error,
         actionLabel: AppLocalizations.get('insight_underweight_action'),
@@ -221,8 +221,8 @@ class InsightsService {
         title: AppLocalizations.get('insight_overweight_title').replaceAll('{petName}', cat.name),
         description: AppLocalizations.get('insight_overweight_description')
             .replaceAll('{weight}', currentWeight.toStringAsFixed(1))
-            .replaceAll('{min}', idealRange.min.toStringAsFixed(1))
-            .replaceAll('{max}', idealRange.max.toStringAsFixed(1)),
+            .replaceAll('{minWeight}', idealRange.min.toStringAsFixed(1))
+            .replaceAll('{maxWeight}', idealRange.max.toStringAsFixed(1)),
         icon: Icons.trending_up_rounded,
         color: AppColors.warning,
         actionLabel: AppLocalizations.get('insight_underweight_action'),
@@ -523,8 +523,8 @@ class InsightsService {
   }
   
   // ============ GENERAL INSIGHTS ============
-  
-  List<Insight> _generateGeneralInsights(List<Cat> cats, List<Reminder> reminders, List<Dog>? dogs) {
+
+  List<Insight> _generateGeneralInsights(List<Cat> cats, List<Reminder> reminders, List<Dog>? dogs, {Set<String>? completedDates}) {
     final insights = <Insight>[];
 
     // Hiç evcil hayvan yoksa
@@ -541,34 +541,96 @@ class InsightsService {
         actionRoute: '/pet/add',
       ));
     }
-    
-    // Gecikmiş hatırlatıcı sayısı
+
+    // Gecikmiş hatırlatıcı sayısı - completion dates kullanarak hesapla
+    // Home screen ile aynı mantık: createdAt'den başlayarak tüm occurrence'ları oluştur
     final now = DateTime.now();
-    final overdueCount = reminders.where((r) {
-      if (!r.isActive || r.isCompleted) return false;
-      if (r.nextDate == null) return false;
-      return r.nextDate!.isBefore(now);
-    }).length;
-    
-    if (overdueCount > 3) {
+    final today = DateTime(now.year, now.month, now.day);
+    final rangeStart = today.subtract(const Duration(days: 30));
+    int overdueCount = 0;
+
+    for (final r in reminders) {
+      if (!r.isActive) continue;
+
+      // Her hatırlatıcı için gecikmiş occurrence'ları hesapla
+      if (r.frequency == 'once') {
+        // Tek seferlik
+        final date = DateTime(r.createdAt.year, r.createdAt.month, r.createdAt.day);
+        final completionKey = '${r.id}_${date.toIso8601String().split('T')[0]}';
+        final isCompleted = completedDates?.contains(completionKey) ?? r.isCompleted;
+        if (!isCompleted && date.isBefore(today) && date.isAfter(rangeStart.subtract(const Duration(days: 1)))) {
+          overdueCount++;
+        }
+      } else {
+        // Tekrarlayan - home screen ile aynı mantık
+        // createdAt'den başla ve rangeStart'a kadar ilerle
+        DateTime current = DateTime(r.createdAt.year, r.createdAt.month, r.createdAt.day);
+
+        // Range başlangıcına kadar ilerle
+        while (current.isBefore(rangeStart)) {
+          final next = _calculateNextOccurrence(current, r.frequency);
+          if (next == null) break;
+          current = next;
+        }
+
+        // Range içindeki geçmiş tarihleri kontrol et
+        while (current.isBefore(today)) {
+          final completionKey = '${r.id}_${current.toIso8601String().split('T')[0]}';
+          final isCompleted = completedDates?.contains(completionKey) ?? false;
+          if (!isCompleted) {
+            overdueCount++;
+          }
+          // Sonraki tarihe git
+          final next = _calculateNextOccurrence(current, r.frequency);
+          if (next == null) break;
+          current = next;
+        }
+      }
+    }
+
+    if (overdueCount > 0) {
       insights.add(Insight(
         id: 'overdue_many',
         type: InsightType.warning,
         priority: InsightPriority.high,
-        title: AppLocalizations.get('insight_overdue_many_title').replaceAll('{count}', overdueCount.toString()),
-        description: AppLocalizations.get('insight_overdue_many_description'),
+        title: AppLocalizations.get('overdue_reminders_count').replaceAll('{count}', overdueCount.toString()),
+        description: AppLocalizations.get('overdue_reminders_insight'),
         icon: Icons.warning_amber_rounded,
         color: AppColors.error,
         actionLabel: AppLocalizations.get('insight_overdue_many_action'),
         actionRoute: '/home',
       ));
     }
-    
-    
+
+
     // Sağlık bakım önerileri
     insights.addAll(_generateHealthCareInsights(cats, reminders));
-    
+
     return insights;
+  }
+
+  /// Bir sonraki occurrence tarihini hesapla
+  DateTime? _calculateNextOccurrence(DateTime from, String frequency) {
+    switch (frequency) {
+      case 'daily':
+        return from.add(const Duration(days: 1));
+      case 'weekly':
+        return from.add(const Duration(days: 7));
+      case 'monthly':
+        return DateTime(from.year, from.month + 1, from.day);
+      case 'quarterly':
+        return DateTime(from.year, from.month + 3, from.day);
+      case 'biannual':
+        return DateTime(from.year, from.month + 6, from.day);
+      case 'yearly':
+        return DateTime(from.year + 1, from.month, from.day);
+      default:
+        if (frequency.startsWith('custom_')) {
+          final days = int.tryParse(frequency.substring(7));
+          if (days != null) return from.add(Duration(days: days));
+        }
+        return null;
+    }
   }
   
   // ============ CAT TYPE-SPECIFIC INSIGHTS ============
@@ -1068,6 +1130,177 @@ class InsightsService {
         icon: Icons.cleaning_services_rounded,
         color: const Color(0xFF9C27B0),
       ));
+
+      // ============ YENİ REMINDER TÜRLERİ İÇİN ÖNERİLER ============
+
+      // Kum temizliği hatırlatıcısı
+      final hasLitterCleaningReminder = catReminders.any((r) =>
+        r.type == 'litter_cleaning' ||
+        r.title.toLowerCase().contains('kum temiz')
+      );
+      if (!hasLitterCleaningReminder) {
+        insights.add(Insight(
+          id: 'litter_cleaning_suggestion_${cat.id}',
+          type: InsightType.suggestion,
+          priority: InsightPriority.medium,
+          title: AppLocalizations.get('insight_litter_cleaning_title'),
+          description: AppLocalizations.get('insight_litter_cleaning_desc').replaceAll('{petName}', cat.name),
+          icon: Icons.cleaning_services_rounded,
+          color: AppColors.hygiene,
+          actionLabel: AppLocalizations.get('add_reminder'),
+          actionRoute: '/reminder/add',
+          actionData: {'catId': cat.id, 'type': 'litter_cleaning'},
+        ));
+      }
+
+      // Tüy yumağı önleme (uzun tüylü kediler için)
+      final hasHairballReminder = catReminders.any((r) =>
+        r.type == 'hairball_prevention' ||
+        r.title.toLowerCase().contains('tüy yumağ')
+      );
+      if (!hasHairballReminder && cat.ageInMonths >= 6) {
+        insights.add(Insight(
+          id: 'hairball_prevention_${cat.id}',
+          type: InsightType.suggestion,
+          priority: InsightPriority.low,
+          title: AppLocalizations.get('insight_hairball_title'),
+          description: AppLocalizations.get('insight_hairball_desc').replaceAll('{petName}', cat.name),
+          icon: Icons.auto_awesome_rounded,
+          color: AppColors.grooming,
+          actionLabel: AppLocalizations.get('add_reminder'),
+          actionRoute: '/reminder/add',
+          actionData: {'catId': cat.id, 'type': 'hairball_prevention'},
+        ));
+      }
+
+      // Tırmalama tahtası
+      final hasScratchingReminder = catReminders.any((r) =>
+        r.type == 'scratching_post' ||
+        r.title.toLowerCase().contains('tırmalama')
+      );
+      if (!hasScratchingReminder && cat.ageInMonths >= 3) {
+        insights.add(Insight(
+          id: 'scratching_post_${cat.id}',
+          type: InsightType.info,
+          priority: InsightPriority.low,
+          title: AppLocalizations.get('insight_scratching_title'),
+          description: AppLocalizations.get('insight_scratching_desc'),
+          icon: Icons.pets_rounded,
+          color: AppColors.activity,
+        ));
+      }
+
+      // Parazit koruması (mevsimsel)
+      final now = DateTime.now();
+      final month = now.month;
+      final hasParasiteReminder = catReminders.any((r) =>
+        r.type == 'flea_tick' || r.type == 'deworming'
+      );
+      if (!hasParasiteReminder && (month >= 3 && month <= 10)) {
+        insights.add(Insight(
+          id: 'parasite_protection_${cat.id}',
+          type: InsightType.warning,
+          priority: InsightPriority.high,
+          title: AppLocalizations.get('insight_parasite_title'),
+          description: AppLocalizations.get('insight_parasite_desc').replaceAll('{petName}', cat.name),
+          icon: Icons.bug_report_rounded,
+          color: AppColors.error,
+          actionLabel: AppLocalizations.get('add_reminder'),
+          actionRoute: '/reminder/add',
+          actionData: {'catId': cat.id, 'type': 'flea_tick'},
+        ));
+      }
+
+      // Vitamin/takviye önerisi (yaşlı kediler için)
+      if (cat.ageInMonths >= 84) {
+        final hasVitaminReminder = catReminders.any((r) => r.type == 'vitamin');
+        if (!hasVitaminReminder) {
+          insights.add(Insight(
+            id: 'vitamin_senior_${cat.id}',
+            type: InsightType.suggestion,
+            priority: InsightPriority.medium,
+            title: AppLocalizations.get('insight_vitamin_senior_title'),
+            description: AppLocalizations.get('insight_vitamin_senior_desc').replaceAll('{petName}', cat.name),
+            icon: Icons.medication_liquid_rounded,
+            color: AppColors.health,
+            actionLabel: AppLocalizations.get('add_reminder'),
+            actionRoute: '/reminder/add',
+            actionData: {'catId': cat.id, 'type': 'vitamin'},
+          ));
+        }
+      }
+
+      // Mikroçip kontrolü
+      final hasMicrochip = catReminders.any((r) => r.type == 'microchip');
+      if (!hasMicrochip && cat.ageInMonths >= 3) {
+        insights.add(Insight(
+          id: 'microchip_suggestion_${cat.id}',
+          type: InsightType.suggestion,
+          priority: InsightPriority.low,
+          title: AppLocalizations.get('insight_microchip_title'),
+          description: AppLocalizations.get('insight_microchip_desc').replaceAll('{petName}', cat.name),
+          icon: Icons.memory_rounded,
+          color: AppColors.info,
+          actionLabel: AppLocalizations.get('add_reminder'),
+          actionRoute: '/reminder/add',
+          actionData: {'catId': cat.id, 'type': 'microchip'},
+        ));
+      }
+
+      // Yıllık kan tahlili (yaşlı kediler için)
+      if (cat.ageInMonths >= 84) {
+        final hasBloodTest = catReminders.any((r) => r.type == 'blood_test');
+        if (!hasBloodTest) {
+          insights.add(Insight(
+            id: 'blood_test_senior_${cat.id}',
+            type: InsightType.suggestion,
+            priority: InsightPriority.medium,
+            title: AppLocalizations.get('insight_blood_test_title'),
+            description: AppLocalizations.get('insight_blood_test_desc').replaceAll('{petName}', cat.name),
+            icon: Icons.science_rounded,
+            color: AppColors.vet,
+            actionLabel: AppLocalizations.get('add_reminder'),
+            actionRoute: '/reminder/add',
+            actionData: {'catId': cat.id, 'type': 'blood_test'},
+          ));
+        }
+      }
+
+      // Eğitim önerisi (yavru kediler için)
+      if (cat.ageInMonths >= 2 && cat.ageInMonths <= 12) {
+        final hasTrainingReminder = catReminders.any((r) => r.type == 'training');
+        if (!hasTrainingReminder) {
+          insights.add(Insight(
+            id: 'training_kitten_${cat.id}',
+            type: InsightType.suggestion,
+            priority: InsightPriority.low,
+            title: AppLocalizations.get('insight_training_kitten_title'),
+            description: AppLocalizations.get('insight_training_kitten_desc').replaceAll('{petName}', cat.name),
+            icon: Icons.school_rounded,
+            color: AppColors.activity,
+            actionLabel: AppLocalizations.get('add_reminder'),
+            actionRoute: '/reminder/add',
+            actionData: {'catId': cat.id, 'type': 'training'},
+          ));
+        }
+      }
+
+      // Fotoğraf anısı
+      final hasPhotoReminder = catReminders.any((r) => r.type == 'photo');
+      if (!hasPhotoReminder) {
+        insights.add(Insight(
+          id: 'photo_memory_${cat.id}',
+          type: InsightType.info,
+          priority: InsightPriority.low,
+          title: AppLocalizations.get('insight_photo_memory_title'),
+          description: AppLocalizations.get('insight_photo_memory_desc').replaceAll('{petName}', cat.name),
+          icon: Icons.camera_alt_rounded,
+          color: AppColors.primary,
+          actionLabel: AppLocalizations.get('add_reminder'),
+          actionRoute: '/reminder/add',
+          actionData: {'catId': cat.id, 'type': 'photo'},
+        ));
+      }
     }
 
     return insights;
@@ -1102,20 +1335,32 @@ class InsightsService {
         id: 'dog_underweight_${dog.id}',
         type: InsightType.warning,
         priority: InsightPriority.high,
-        title: AppLocalizations.get('insight_underweight_title'),
-        description: AppLocalizations.get('insight_dog_underweight_desc'),
+        title: AppLocalizations.get('insight_underweight_title').replaceAll('{petName}', dog.name),
+        description: AppLocalizations.get('insight_dog_underweight_desc')
+            .replaceAll('{weight}', latestWeight.toStringAsFixed(1))
+            .replaceAll('{minWeight}', idealRange.min.toStringAsFixed(1))
+            .replaceAll('{maxWeight}', idealRange.max.toStringAsFixed(1)),
         icon: Icons.trending_down,
         color: AppColors.warning,
+        actionLabel: AppLocalizations.get('insight_underweight_action'),
+        actionRoute: '/reminder/add',
+        actionData: {'petId': dog.id, 'type': 'vet'},
       ));
     } else if (latestWeight > idealRange.max) {
       insights.add(Insight(
         id: 'dog_overweight_${dog.id}',
         type: InsightType.warning,
         priority: InsightPriority.high,
-        title: AppLocalizations.get('insight_overweight_title'),
-        description: AppLocalizations.get('insight_dog_overweight_desc'),
+        title: AppLocalizations.get('insight_overweight_title').replaceAll('{petName}', dog.name),
+        description: AppLocalizations.get('insight_dog_overweight_desc')
+            .replaceAll('{weight}', latestWeight.toStringAsFixed(1))
+            .replaceAll('{minWeight}', idealRange.min.toStringAsFixed(1))
+            .replaceAll('{maxWeight}', idealRange.max.toStringAsFixed(1)),
         icon: Icons.trending_up,
         color: AppColors.warning,
+        actionLabel: AppLocalizations.get('insight_underweight_action'),
+        actionRoute: '/reminder/add',
+        actionData: {'petId': dog.id, 'type': 'vet'},
       ));
     }
 

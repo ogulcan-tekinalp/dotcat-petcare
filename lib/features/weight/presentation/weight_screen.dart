@@ -5,6 +5,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/date_helper.dart';
 import '../../../core/utils/localization.dart';
 import '../../../core/services/insights_service.dart';
+import '../../../core/services/ad_service.dart';
 import '../../../data/models/cat.dart';
 import '../../../data/models/dog.dart';
 import '../../../data/models/pet_type.dart';
@@ -20,7 +21,7 @@ class WeightScreen extends ConsumerStatefulWidget {
   ConsumerState<WeightScreen> createState() => _WeightScreenState();
 }
 
-class _WeightScreenState extends ConsumerState<WeightScreen> {
+class _WeightScreenState extends ConsumerState<WeightScreen> with WidgetsBindingObserver {
   DateTime _selectedDate = DateTime.now();
 
   // Helper getters
@@ -32,9 +33,28 @@ class _WeightScreenState extends ConsumerState<WeightScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(weightProvider.notifier).loadWeightRecords(_petId);
+      _loadWeights();
     });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Uygulama tekrar aktif olduğunda verileri yenile
+    if (state == AppLifecycleState.resumed) {
+      _loadWeights();
+    }
+  }
+
+  void _loadWeights() {
+    ref.read(weightProvider.notifier).loadWeightRecords(_petId);
   }
 
   @override
@@ -596,6 +616,10 @@ class _WeightScreenState extends ConsumerState<WeightScreen> {
                     weight: weight,
                     // kaydı seçili tarih ile oluştur
                   );
+
+                  // Show ad after weight entry
+                  await AdService.instance.onWeightAdded();
+
                   if (context.mounted) {
                     Navigator.pop(context);
                   }

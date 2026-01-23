@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'core/theme/app_theme.dart';
 import 'core/utils/notification_service.dart';
 import 'core/utils/localization.dart';
@@ -14,6 +15,7 @@ import 'core/services/widget_service.dart';
 import 'core/services/reminder_migration_service.dart';
 import 'core/services/ad_service.dart';
 import 'core/services/premium_service.dart';
+import 'core/services/insights_notification_service.dart';
 import 'features/onboarding/presentation/splash_screen.dart';
 
 // Theme mode provider
@@ -116,6 +118,19 @@ final appInitProvider = FutureProvider<AppInitState>((ref) async {
       debugPrint('✅ PremiumService initialized');
     } catch (e) {
       debugPrint('⚠️ PremiumService init error: $e');
+    }
+
+    // Reset insights state (one-time migration to new delivery-based system)
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final insightsMigrated = prefs.getBool('insights_v2_migration_done') ?? false;
+      if (!insightsMigrated) {
+        await InsightsNotificationService.instance.resetAllInsightsState();
+        await prefs.setBool('insights_v2_migration_done', true);
+        debugPrint('✅ Insights system reset for v2 delivery-based system');
+      }
+    } catch (e) {
+      debugPrint('⚠️ Insights migration error: $e');
     }
   }
 

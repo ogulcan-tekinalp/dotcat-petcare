@@ -75,6 +75,42 @@ class AppColors {
   static const dotcat = Color(0xFF6366F1);  // Indigo
   static const grooming = Color(0xFFEC4899);  // Pink
   static const exercise = Color(0xFFFB923C);  // Orange
+
+  // Yeni hatırlatıcı türleri renkleri
+  static const water = Color(0xFF06B6D4);  // Cyan - Su
+  static const brushing = Color(0xFFEC4899);  // Pink - Tarama
+  static const nailTrim = Color(0xFF8B5CF6);  // Violet - Tırnak
+  static const bath = Color(0xFF0EA5E9);  // Sky Blue - Banyo
+  static const earCleaning = Color(0xFFA855F7);  // Purple - Kulak
+  static const dentalCare = Color(0xFFF472B6);  // Pink - Diş bakımı
+  static const fleaTick = Color(0xFFDC2626);  // Red - Pire/Kene
+  static const deworming = Color(0xFFEA580C);  // Orange - İç parazit
+  static const neutering = Color(0xFF7C3AED);  // Violet - Kısırlaştırma
+  static const microchip = Color(0xFF2563EB);  // Blue - Mikroçip
+  static const petInsurance = Color(0xFF059669);  // Emerald - Sigorta
+  static const treat = Color(0xFFFBBF24);  // Yellow - Ödül
+  static const vitamin = Color(0xFF84CC16);  // Lime - Vitamin
+  static const playtime = Color(0xFFF97316);  // Orange - Oyun
+  static const training = Color(0xFF2563EB);  // Blue - Eğitim
+  static const photo = Color(0xFFF472B6);  // Pink - Fotoğraf
+  static const emergency = Color(0xFFDC2626);  // Red - Acil
+
+  // Köpek-specific renkler
+  static const walk = Color(0xFF22C55E);  // Green - Yürüyüş
+  static const poopCleanup = Color(0xFF78716C);  // Stone - Kaka toplama
+  static const dogPark = Color(0xFF16A34A);  // Green - Köpek parkı
+  static const socialization = Color(0xFF6366F1);  // Indigo - Sosyalleşme
+
+  // Kedi-specific renkler
+  static const litterCleaning = Color(0xFF78716C);  // Stone - Kum temizliği
+  static const litterChange = Color(0xFF737373);  // Gray - Kum değişimi
+  static const scratchingPost = Color(0xFFA3A3A3);  // Gray - Tırmalama tahtası
+  static const hairball = Color(0xFFA78BFA);  // Violet - Tüy yumağı
+  static const catnip = Color(0xFF22C55E);  // Green - Kedi otu
+
+  // Kategori renkleri
+  static const activity = Color(0xFFF97316);  // Orange - Aktivite
+  static const hygiene = Color(0xFF78716C);  // Stone - Hijyen
 }
 
 /// Modern typography scale

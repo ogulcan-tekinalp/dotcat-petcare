@@ -771,7 +771,7 @@ class _DogProfileScreenState extends ConsumerState<DogProfileScreen> {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
-                isToday ? 'Bugün' : isTomorrow ? 'Yarın' : _getRelativeDate(task.nextDate!),
+                isToday ? AppLocalizations.get('today') : isTomorrow ? AppLocalizations.get('tomorrow') : _getRelativeDate(task.nextDate!),
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
@@ -1055,7 +1055,7 @@ class _DogProfileScreenState extends ConsumerState<DogProfileScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Tüm Kayıtlar',
+                AppLocalizations.get('all_records'),
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -1063,7 +1063,7 @@ class _DogProfileScreenState extends ConsumerState<DogProfileScreen> {
                 ),
               ),
               Text(
-                '${reminders.length} kayıt',
+                AppLocalizations.get('x_records').replaceAll('{count}', '${reminders.length}'),
                 style: TextStyle(
                   fontSize: 13,
                   color: AppColors.textSecondary,
@@ -1425,7 +1425,15 @@ class _DogProfileScreenState extends ConsumerState<DogProfileScreen> {
       case 'quarterly': return AppLocalizations.get('quarterly');
       case 'biannual': return AppLocalizations.get('biannual');
       case 'yearly': return AppLocalizations.get('yearly');
-      default: return frequency;
+      default:
+        // Handle custom_X format (e.g., custom_2, custom_14)
+        if (frequency.startsWith('custom_')) {
+          final days = int.tryParse(frequency.substring(7));
+          if (days != null) {
+            return AppLocalizations.get('every_x_days_format').replaceAll('{days}', days.toString());
+          }
+        }
+        return frequency;
     }
   }
 
@@ -1434,12 +1442,12 @@ class _DogProfileScreenState extends ConsumerState<DogProfileScreen> {
     final today = DateTime(now.year, now.month, now.day);
     final targetDate = DateTime(date.year, date.month, date.day);
     final diff = targetDate.difference(today).inDays;
-    
-    if (diff == 0) return 'Bugün';
-    if (diff == 1) return 'Yarın';
-    if (diff == -1) return 'Dün';
-    if (diff < 0) return '${-diff} gün önce';
-    if (diff <= 7) return '$diff gün sonra';
+
+    if (diff == 0) return AppLocalizations.get('today');
+    if (diff == 1) return AppLocalizations.get('tomorrow');
+    if (diff == -1) return AppLocalizations.get('yesterday');
+    if (diff < 0) return AppLocalizations.get('x_days_ago').replaceAll('{days}', '${-diff}');
+    if (diff <= 7) return AppLocalizations.get('in_x_days').replaceAll('{days}', '$diff');
     return DateHelper.formatDate(date);
   }
 
@@ -1479,15 +1487,15 @@ class _DogProfileScreenState extends ConsumerState<DogProfileScreen> {
 
   String _getNextVaccineText(List<Reminder> vaccines) {
     final upcoming = vaccines.where((v) => v.nextDate != null && v.nextDate!.isAfter(DateTime.now())).toList();
-    if (upcoming.isEmpty) return vaccines.isEmpty ? 'Aşı kaydı ekle' : 'Yaklaşan aşı yok';
+    if (upcoming.isEmpty) return vaccines.isEmpty ? AppLocalizations.get('add_vaccine_record') : AppLocalizations.get('no_upcoming_vaccine');
     upcoming.sort((a, b) => a.nextDate!.compareTo(b.nextDate!));
-    return 'Sonraki: ${_getRelativeDate(upcoming.first.nextDate!)}';
+    return AppLocalizations.get('next_colon').replaceAll('{date}', _getRelativeDate(upcoming.first.nextDate!));
   }
 
   String _getNextMedicineText(List<Reminder> medicines) {
     final upcoming = medicines.where((m) => m.nextDate != null && m.nextDate!.isAfter(DateTime.now())).toList();
-    if (upcoming.isEmpty) return medicines.isEmpty ? 'Hatırlatıcı ekle' : 'Yaklaşan yok';
+    if (upcoming.isEmpty) return medicines.isEmpty ? AppLocalizations.get('add_reminder') : AppLocalizations.get('no_upcoming_short');
     upcoming.sort((a, b) => a.nextDate!.compareTo(b.nextDate!));
-    return 'Sonraki: ${_getRelativeDate(upcoming.first.nextDate!)}';
+    return AppLocalizations.get('next_colon').replaceAll('{date}', _getRelativeDate(upcoming.first.nextDate!));
   }
 }

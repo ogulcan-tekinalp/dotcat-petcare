@@ -15,12 +15,14 @@ final completionsProvider = StateNotifierProvider<CompletionsNotifier, Completio
 class CompletionsState {
   final Set<String> completedDates;
   final Map<String, DateTime> completionTimes;
+  final List<ReminderCompletion> allCompletions; // Tüm completion verileri (masraf dahil)
   final bool isLoading;
   final String? error;
 
   CompletionsState({
     required this.completedDates,
     required this.completionTimes,
+    this.allCompletions = const [],
     this.isLoading = false,
     this.error,
   });
@@ -28,15 +30,32 @@ class CompletionsState {
   CompletionsState copyWith({
     Set<String>? completedDates,
     Map<String, DateTime>? completionTimes,
+    List<ReminderCompletion>? allCompletions,
     bool? isLoading,
     String? error,
   }) {
     return CompletionsState(
       completedDates: completedDates ?? this.completedDates,
       completionTimes: completionTimes ?? this.completionTimes,
+      allCompletions: allCompletions ?? this.allCompletions,
       isLoading: isLoading ?? this.isLoading,
       error: error ?? this.error,
     );
+  }
+
+  /// Belirli bir pet'e ait masraf içeren completion'ları döndür
+  List<ReminderCompletion> getExpensesForPet(String petId, List<String> reminderIds) {
+    return allCompletions
+        .where((c) => reminderIds.contains(c.reminderId) && c.hasExpense)
+        .toList();
+  }
+
+  /// Toplam masraf hesapla (belirli para birimine göre)
+  double getTotalExpenseForPet(String petId, List<String> reminderIds, {String? currency}) {
+    final expenses = getExpensesForPet(petId, reminderIds);
+    return expenses
+        .where((c) => currency == null || c.currency == currency)
+        .fold(0.0, (sum, c) => sum + (c.cost ?? 0.0));
   }
 }
 
@@ -59,6 +78,7 @@ class CompletionsNotifier extends StateNotifier<CompletionsState> {
         state = CompletionsState(
           completedDates: completions.map((c) => c.id).toSet(),
           completionTimes: {for (var c in completions) c.id: c.completedAt},
+          allCompletions: completions,
           isLoading: false,
         );
       }, onError: (error) {
@@ -78,6 +98,7 @@ class CompletionsNotifier extends StateNotifier<CompletionsState> {
         state = CompletionsState(
           completedDates: cloudCompletions.map((c) => c.id).toSet(),
           completionTimes: {for (var c in cloudCompletions) c.id: c.completedAt},
+          allCompletions: cloudCompletions,
           isLoading: false,
         );
       } else {

@@ -221,6 +221,7 @@ class RemindersNotifier extends StateNotifier<List<Reminder>> {
     required String title,
     required String type,
     required String time,
+    List<String>? additionalTimes,
     String frequency = 'daily',
     String? notes,
     String? description,
@@ -231,19 +232,20 @@ class RemindersNotifier extends StateNotifier<List<Reminder>> {
     DateTime? reminderDate,
   }) async {
     final reminderRecordDate = date ?? DateTime.now();
-    
+
     // Calculate next date based on frequency
     DateTime? calculatedNextDate = nextDate;
     if (calculatedNextDate == null && frequency != 'once') {
       calculatedNextDate = _calculateNextFromDate(reminderRecordDate, frequency);
     }
-    
+
     final reminder = Reminder(
       id: _uuid.v4(),
       petId: catId,
       title: title,
       type: type,
       time: time,
+      additionalTimes: additionalTimes,
       frequency: frequency,
       isActive: !isCompleted,
       isCompleted: isCompleted,

@@ -14,9 +14,11 @@ class WeightNotifier extends StateNotifier<List<WeightRecord>> {
 
   final _firestore = FirestoreService();
   final _uuid = const Uuid();
+  String? _currentPetId; // Mevcut yüklü pet ID'si
 
   Future<void> loadWeightRecords(String catId) async {
     try {
+      _currentPetId = catId;
       final auth = FirebaseAuth.instance;
       if (auth.currentUser != null) {
         final allWeights = await _firestore.getWeights();
@@ -49,7 +51,10 @@ class WeightNotifier extends StateNotifier<List<WeightRecord>> {
     try {
       // Firebase'e kaydet
       await _firestore.saveWeight(record);
-      state = [record, ...state];
+      // Sadece mevcut yüklü pet için state'i güncelle
+      if (_currentPetId == catId) {
+        state = [record, ...state];
+      }
       return record;
     } catch (e) {
       debugPrint('WeightProvider: Error saving weight to Firestore: $e');

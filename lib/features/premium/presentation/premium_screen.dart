@@ -19,6 +19,8 @@ class PremiumScreen extends ConsumerStatefulWidget {
 class _PremiumScreenState extends ConsumerState<PremiumScreen> {
   bool _isLoading = true;
   bool _isPurchasing = false;
+  bool _hasError = false;
+  String? _errorMessage;
   Offerings? _offerings;
   Package? _selectedPackage;
   final _promoController = TextEditingController();
@@ -37,18 +39,45 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen> {
   }
 
   Future<void> _loadOfferings() async {
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _hasError = false;
+      _errorMessage = null;
+    });
+
     try {
+      debugPrint('PremiumScreen: Loading offerings...');
       final offerings = await PremiumService.instance.getOfferings();
+
+      debugPrint('PremiumScreen: Offerings loaded: ${offerings?.current?.identifier}');
+      debugPrint('PremiumScreen: Monthly package: ${offerings?.current?.monthly?.storeProduct.priceString}');
+      debugPrint('PremiumScreen: Annual package: ${offerings?.current?.annual?.storeProduct.priceString}');
+      debugPrint('PremiumScreen: Available packages: ${offerings?.current?.availablePackages.length}');
+
+      if (offerings?.current == null || offerings!.current!.availablePackages.isEmpty) {
+        setState(() {
+          _offerings = offerings;
+          _hasError = true;
+          _errorMessage = AppLocalizations.get('offerings_not_available');
+          _isLoading = false;
+        });
+        return;
+      }
+
       setState(() {
         _offerings = offerings;
         // Default select yearly package (best value)
-        _selectedPackage = offerings?.current?.annual ?? offerings?.current?.monthly;
+        _selectedPackage = offerings.current?.annual ?? offerings.current?.monthly;
         _isLoading = false;
+        _hasError = false;
       });
     } catch (e) {
-      setState(() => _isLoading = false);
-      debugPrint('Error loading offerings: $e');
+      debugPrint('PremiumScreen: Error loading offerings: $e');
+      setState(() {
+        _isLoading = false;
+        _hasError = true;
+        _errorMessage = e.toString();
+      });
     }
   }
 
@@ -390,30 +419,32 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen> {
 
           const SizedBox(height: 20),
 
-          // Subscribe Button
-          SizedBox(
-            width: double.infinity,
-            height: 54,
-            child: ElevatedButton(
-              onPressed: _isPurchasing ? null : _purchase,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                elevation: 0,
+          // Subscribe Button - only show if packages are available
+          if (!_hasError && _selectedPackage != null)
+            SizedBox(
+              width: double.infinity,
+              height: 54,
+              child: ElevatedButton(
+                onPressed: _isPurchasing || _selectedPackage == null ? null : _purchase,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  elevation: 0,
+                  disabledBackgroundColor: AppColors.primary.withOpacity(0.5),
+                ),
+                child: _isPurchasing
+                    ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                      )
+                    : Text(
+                        AppLocalizations.get('subscribe'),
+                        style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+                      ),
               ),
-              child: _isPurchasing
-                  ? const SizedBox(
-                      width: 24,
-                      height: 24,
-                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                    )
-                  : Text(
-                      AppLocalizations.get('subscribe'),
-                      style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
-                    ),
             ),
-          ),
 
           const SizedBox(height: 16),
 
@@ -650,6 +681,11 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen> {
   }
 
   Widget _buildSubscriptionPlans(bool isDark) {
+    // Show error state with retry button
+    if (_hasError) {
+      return _buildErrorState(isDark);
+    }
+
     final monthlyPackage = _offerings?.current?.monthly;
     final yearlyPackage = _offerings?.current?.annual;
 
@@ -660,6 +696,11 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen> {
       final yearlyPrice = yearlyPackage.storeProduct.price;
       final yearlyMonthlyEquivalent = yearlyPrice / 12;
       savingsPercent = ((1 - yearlyMonthlyEquivalent / monthlyPrice) * 100).round();
+    }
+
+    // If no offerings available, show error with retry
+    if (monthlyPackage == null && yearlyPackage == null) {
+      return _buildErrorState(isDark);
     }
 
     return Column(
@@ -679,7 +720,8 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen> {
             onTap: () => setState(() => _selectedPackage = yearlyPackage),
           ),
 
-        const SizedBox(height: 12),
+        if (yearlyPackage != null && monthlyPackage != null)
+          const SizedBox(height: 12),
 
         // Monthly Plan
         if (monthlyPackage != null)
@@ -692,31 +734,72 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen> {
             period: AppLocalizations.get('per_month'),
             onTap: () => setState(() => _selectedPackage = monthlyPackage),
           ),
+      ],
+    );
+  }
 
-        // If no offerings available, show placeholder
-        if (monthlyPackage == null && yearlyPackage == null) ...[
-          _buildPlanCard(
-            package: null,
-            isSelected: true,
-            isDark: isDark,
-            title: AppLocalizations.get('yearly'),
-            price: '\$29.99',
-            period: AppLocalizations.get('per_year'),
-            badge: AppLocalizations.get('best_value'),
-            onTap: () {},
+  Widget _buildErrorState(bool isDark) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Colors.orange.withOpacity(0.3),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        children: [
+          Icon(
+            Icons.cloud_off_rounded,
+            size: 48,
+            color: Colors.orange.shade400,
           ),
-          const SizedBox(height: 12),
-          _buildPlanCard(
-            package: null,
-            isSelected: false,
-            isDark: isDark,
-            title: AppLocalizations.get('monthly'),
-            price: '\$4.99',
-            period: AppLocalizations.get('per_month'),
-            onTap: () {},
+          const SizedBox(height: 16),
+          Text(
+            AppLocalizations.get('subscription_load_error'),
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w500,
+              color: isDark ? Colors.white : Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            AppLocalizations.get('subscription_load_error_desc'),
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 13,
+              color: isDark ? Colors.white60 : Colors.black54,
+            ),
+          ),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _isLoading ? null : _loadOfferings,
+              icon: _isLoading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.refresh),
+              label: Text(_isLoading
+                  ? AppLocalizations.get('loading')
+                  : AppLocalizations.get('retry')),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
           ),
         ],
-      ],
+      ),
     );
   }
 

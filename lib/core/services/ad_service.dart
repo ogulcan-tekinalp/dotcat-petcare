@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -18,6 +17,7 @@ class AdService {
   // Counters for ad frequency control
   int _reminderAddCount = 0;
   int _reminderCompleteCount = 0;
+  int _weightEntryCount = 0;
 
   // Premium status cache
   bool _isPremium = false;
@@ -35,6 +35,7 @@ class AdService {
   // Preference keys
   static const String _prefKeyReminderAddCount = 'ad_reminder_add_count';
   static const String _prefKeyReminderCompleteCount = 'ad_reminder_complete_count';
+  static const String _prefKeyWeightEntryCount = 'ad_weight_entry_count';
   static const String _prefKeyLastAdShown = 'ad_last_shown';
 
   /// Initialize the AdMob SDK
@@ -49,6 +50,7 @@ class AdService {
       final prefs = await SharedPreferences.getInstance();
       _reminderAddCount = prefs.getInt(_prefKeyReminderAddCount) ?? 0;
       _reminderCompleteCount = prefs.getInt(_prefKeyReminderCompleteCount) ?? 0;
+      _weightEntryCount = prefs.getInt(_prefKeyWeightEntryCount) ?? 0;
 
       debugPrint('AdService: Initialized successfully');
 
@@ -115,16 +117,14 @@ class AdService {
   }
 
   /// Called when user adds a new reminder
-  /// Shows ad after the first pet and first reminder (starting from 2nd reminder)
+  /// Shows ad after every reminder except the first one
   Future<bool> onReminderAdded({
-    required int totalPets,
     required int totalReminders,
   }) async {
     if (_isPremium) return false;
 
-    // Don't show ad for first pet's first reminder
-    // totalReminders is the count BEFORE adding, so 0 means this is the first
-    if (totalPets <= 1 && totalReminders <= 0) {
+    // Don't show ad for the first reminder (when totalReminders is 0 before adding)
+    if (totalReminders <= 0) {
       debugPrint('AdService: Skipping ad for first reminder');
       return false;
     }
@@ -132,32 +132,27 @@ class AdService {
     _reminderAddCount++;
     await _saveCounters();
 
-    // Show ad every 2nd reminder addition (50% of the time after first)
-    if (_reminderAddCount % 2 == 0) {
-      return await _showInterstitialAd();
-    }
-
-    return false;
+    // Show ad for every reminder after the first
+    return await _showInterstitialAd();
   }
 
   /// Called when user completes a reminder
-  /// Shows ad with 30% probability
+  /// Shows ad every 2 completions
   Future<bool> onReminderCompleted() async {
     if (_isPremium) return false;
 
     _reminderCompleteCount++;
     await _saveCounters();
 
-    // 30% chance to show ad on completion
-    final random = Random();
-    if (random.nextDouble() < 0.30) {
-      // Check if we haven't shown an ad in the last 2 minutes
+    // Show ad every 2 completions
+    if (_reminderCompleteCount % 2 == 0) {
+      // Check if we haven't shown an ad in the last 1 minute
       final prefs = await SharedPreferences.getInstance();
       final lastAdShown = prefs.getInt(_prefKeyLastAdShown) ?? 0;
       final now = DateTime.now().millisecondsSinceEpoch;
 
-      if (now - lastAdShown < 120000) {
-        // 2 minutes
+      if (now - lastAdShown < 60000) {
+        // 1 minute
         debugPrint('AdService: Skipping ad, too soon since last ad');
         return false;
       }
@@ -166,6 +161,28 @@ class AdService {
     }
 
     return false;
+  }
+
+  /// Called when user adds a weight entry
+  /// Shows ad on every weight entry
+  Future<bool> onWeightAdded() async {
+    if (_isPremium) return false;
+
+    _weightEntryCount++;
+    await _saveCounters();
+
+    // Check if we haven't shown an ad in the last 1 minute
+    final prefs = await SharedPreferences.getInstance();
+    final lastAdShown = prefs.getInt(_prefKeyLastAdShown) ?? 0;
+    final now = DateTime.now().millisecondsSinceEpoch;
+
+    if (now - lastAdShown < 60000) {
+      // 1 minute
+      debugPrint('AdService: Skipping weight ad, too soon since last ad');
+      return false;
+    }
+
+    return await _showInterstitialAd();
   }
 
   /// Show interstitial ad
@@ -199,12 +216,14 @@ class AdService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_prefKeyReminderAddCount, _reminderAddCount);
     await prefs.setInt(_prefKeyReminderCompleteCount, _reminderCompleteCount);
+    await prefs.setInt(_prefKeyWeightEntryCount, _weightEntryCount);
   }
 
   /// Reset ad counters (useful for testing)
   Future<void> resetCounters() async {
     _reminderAddCount = 0;
     _reminderCompleteCount = 0;
+    _weightEntryCount = 0;
     await _saveCounters();
     debugPrint('AdService: Counters reset');
   }

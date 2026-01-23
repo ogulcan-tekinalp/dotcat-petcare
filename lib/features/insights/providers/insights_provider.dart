@@ -29,11 +29,12 @@ final allInsightsProvider = FutureProvider<List<Insight>>((ref) async {
   );
 });
 
-/// Filtered insights provider (dismisssed ones removed, daily limit applied)
+/// Filtered insights provider (dismissed ones removed, insights shown every 2 days)
 final insightsProvider = FutureProvider<List<Insight>>((ref) async {
   final allInsights = await ref.watch(allInsightsProvider.future);
   final prefs = await SharedPreferences.getInstance();
   final now = DateTime.now();
+  final today = now.toIso8601String().split('T')[0];
 
   // Get dismissed insights with timestamps (format: "insightId:timestamp")
   final dismissedList = prefs.getStringList('insights_dismissed_v2') ?? [];
@@ -90,16 +91,8 @@ final insightsProvider = FutureProvider<List<Insight>>((ref) async {
     await prefs.setStringList('insights_dismissed_v2', updatedDismissedList);
 
     // Send notification for reactivated insights
-    // Note: Notification sending will be handled by a background service
     await prefs.setStringList('insights_reactivated', insightsToReactivate);
   }
-
-  // Get insights shown today
-  final today = now.toIso8601String().split('T')[0];
-  final lastShownDate = prefs.getString('insights_last_shown_date');
-  final shownToday = lastShownDate == today
-      ? (prefs.getStringList('insights_shown_today') ?? [])
-      : <String>[];
 
   // Filter out dismissed insights (but include reactivated ones)
   final currentDismissed = dismissedMap.keys.toSet();
@@ -107,25 +100,84 @@ final insightsProvider = FutureProvider<List<Insight>>((ref) async {
       .where((i) => !currentDismissed.contains(i.id) || insightsToReactivate.contains(i.id))
       .toList();
 
-  // If it's a new day, reset shown list and show max 2 insights
-  if (lastShownDate != today) {
-    final dailyInsights = activeInsights.take(2).toList();
-    await prefs.setString('insights_last_shown_date', today);
-    await prefs.setStringList('insights_shown_today', dailyInsights.map((i) => i.id).toList());
-    return dailyInsights;
+  // === 2 GÜNDE BİR ÖNERİ GÖSTERİM SİSTEMİ ===
+  // Son gösterim tarihini kontrol et
+  final lastShownDateStr = prefs.getString('insights_last_shown_date');
+  final shownInsights = prefs.getStringList('insights_shown_history') ?? [];
+  final lastInsightIndex = prefs.getInt('insights_last_index') ?? 0;
+
+  // High priority insights always shown (gecikmiş hatırlatıcılar gibi)
+  final highPriorityInsights = activeInsights.where((i) => i.priority == InsightPriority.high).toList();
+
+  // Normal priority insights - 2 günde bir göster
+  final normalInsights = activeInsights.where((i) => i.priority != InsightPriority.high).toList();
+
+  // Son gösterimden bu yana kaç gün geçmiş?
+  int daysSinceLastShown = 999; // İlk çalışmada her zaman göster
+  if (lastShownDateStr != null) {
+    try {
+      final lastShownDate = DateTime.parse(lastShownDateStr);
+      daysSinceLastShown = now.difference(lastShownDate).inDays;
+    } catch (_) {}
   }
 
-  // Return insights shown today
-  return activeInsights.where((i) => shownToday.contains(i.id)).toList();
+  // Sonuç listesi
+  final resultInsights = <Insight>[];
+
+  // High priority önerileri her zaman ekle
+  resultInsights.addAll(highPriorityInsights);
+
+  // Normal önerileri 2 günde bir sırayla ekle
+  if (daysSinceLastShown >= 2 && normalInsights.isNotEmpty) {
+    // Sıradaki insight'ı al (round-robin)
+    final nextIndex = lastInsightIndex % normalInsights.length;
+    final nextInsight = normalInsights[nextIndex];
+
+    // Daha önce gösterilmediyse veya 7 günden fazla olduysa ekle
+    final wasShownRecently = shownInsights.any((entry) {
+      final parts = entry.split(':');
+      if (parts.length == 2 && parts[0] == nextInsight.id) {
+        try {
+          final shownDate = DateTime.parse(parts[1]);
+          return now.difference(shownDate).inDays < 7;
+        } catch (_) {}
+      }
+      return false;
+    });
+
+    if (!wasShownRecently) {
+      resultInsights.add(nextInsight);
+
+      // Geçmişe ekle
+      final newHistory = List<String>.from(shownInsights);
+      newHistory.add('${nextInsight.id}:$today');
+      // Son 30 girişi tut
+      if (newHistory.length > 30) {
+        newHistory.removeRange(0, newHistory.length - 30);
+      }
+
+      await prefs.setStringList('insights_shown_history', newHistory);
+      await prefs.setInt('insights_last_index', nextIndex + 1);
+      await prefs.setString('insights_last_shown_date', today);
+
+      // Yeni öneri için bildirim flag'i set et
+      await prefs.setBool('insights_has_new', true);
+    }
+  }
+
+  return resultInsights;
 });
 
-/// High priority insights count (for badge) - counts ALL high priority insights, not just filtered ones
+/// High priority insights count (for badge) - yeni öneri olduğunda da badge göster
 final highPriorityInsightsCountProvider = FutureProvider<int>((ref) async {
   final allInsights = await ref.watch(allInsightsProvider.future);
   final prefs = await SharedPreferences.getInstance();
 
   // Get dismissed insights
   final dismissedList = prefs.getStringList('insights_dismissed') ?? [];
+
+  // Yeni öneri var mı?
+  final hasNewInsight = prefs.getBool('insights_has_new') ?? false;
 
   // Count high priority insights that are not dismissed
   int count = 0;
@@ -144,8 +196,19 @@ final highPriorityInsightsCountProvider = FutureProvider<int>((ref) async {
     }
   }
 
+  // Yeni öneri varsa en az 1 göster
+  if (hasNewInsight && count == 0) {
+    count = 1;
+  }
+
   return count;
 });
+
+/// Yeni öneri görüldü olarak işaretle (insights ekranına girildiğinde çağrılır)
+Future<void> markInsightsAsSeen() async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setBool('insights_has_new', false);
+}
 
 /// Insights actions provider
 final insightsActionsProvider = Provider((ref) => InsightsActions(ref));

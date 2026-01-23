@@ -10,6 +10,12 @@ import '../../data/models/weight_record.dart';
 
 /// Service for scheduling and managing insight notifications
 /// Sends smart recommendations as notifications at user's preferred time
+///
+/// INSIGHT DELIVERY SYSTEM:
+/// - Insights are generated but NOT shown until delivered via notification
+/// - User sees only delivered insights in the Insights screen
+/// - Snooze: hide for X days, then re-notify
+/// - Dismiss: permanently hide (re-shows after 30 days if action not taken)
 class InsightsNotificationService {
   static final InsightsNotificationService instance = InsightsNotificationService._init();
 
@@ -26,8 +32,9 @@ class InsightsNotificationService {
   // Preference keys
   static const String _prefKeyLastNotificationDate = 'insights_last_notification_date';
   static const String _prefKeyDismissedInsights = 'insights_dismissed';
+  static const String _prefKeyDeliveredInsights = 'insights_delivered'; // NEW: Track delivered insights
 
-  /// Schedule daily insight notification based on user preference
+  /// Schedule insight notification (every 2 days) based on user preference
   Future<void> scheduleDailyInsightNotification({
     required List<Cat> cats,
     required List<Reminder> reminders,
@@ -44,13 +51,24 @@ class InsightsNotificationService {
       final hour = int.parse(timeParts[0]);
       final minute = int.parse(timeParts[1]);
 
-      // Check if we already sent a notification today
-      final lastNotificationDate = prefs.getString(_prefKeyLastNotificationDate);
-      final today = DateTime.now().toIso8601String().split('T')[0];
+      // Check if we already sent a notification within 2 days
+      final lastNotificationDateStr = prefs.getString(_prefKeyLastNotificationDate);
+      final now = DateTime.now();
+      final today = now.toIso8601String().split('T')[0];
 
-      if (lastNotificationDate == today) {
-        debugPrint('InsightsNotificationService: Already sent notification today');
-        return;
+      if (lastNotificationDateStr != null) {
+        try {
+          final lastNotificationDate = DateTime.parse(lastNotificationDateStr);
+          final daysSinceLastNotification = now.difference(lastNotificationDate).inDays;
+
+          // 2 günde bir bildirim gönder
+          if (daysSinceLastNotification < 2) {
+            debugPrint('InsightsNotificationService: Last notification was $daysSinceLastNotification days ago, waiting for 2 days');
+            return;
+          }
+        } catch (_) {
+          // Parse hatası, devam et
+        }
       }
 
       // Generate insights
@@ -84,7 +102,7 @@ class InsightsNotificationService {
       final topInsight = notifiableInsights.first;
 
       // Schedule notification for the next occurrence of the preferred time
-      final now = tz.TZDateTime.now(tz.local);
+      final tzNow = tz.TZDateTime.now(tz.local);
       var scheduledDate = tz.TZDateTime(
         tz.local,
         now.year,
@@ -95,7 +113,7 @@ class InsightsNotificationService {
       );
 
       // If the time has passed today, schedule for tomorrow
-      if (scheduledDate.isBefore(now)) {
+      if (scheduledDate.isBefore(tzNow)) {
         scheduledDate = scheduledDate.add(const Duration(days: 1));
       }
 
@@ -107,6 +125,9 @@ class InsightsNotificationService {
         dateTime: scheduledDate.toLocal(),
         payload: 'insight:${topInsight.id}',
       );
+
+      // Mark insight as delivered (will be shown in Insights screen)
+      await markInsightAsDelivered(topInsight.id);
 
       // Update last notification date
       await prefs.setString(_prefKeyLastNotificationDate, today);
@@ -205,6 +226,124 @@ class InsightsNotificationService {
       debugPrint('InsightsNotificationService: Cleared all dismissed insights');
     } catch (e) {
       debugPrint('InsightsNotificationService: Error clearing dismissed insights: $e');
+    }
+  }
+
+  /// Mark an insight as delivered (shown via notification)
+  /// Only delivered insights are visible in Insights screen
+  Future<void> markInsightAsDelivered(String insightId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final delivered = prefs.getStringList(_prefKeyDeliveredInsights) ?? [];
+      final now = DateTime.now().toIso8601String();
+      final entry = '$insightId:$now';
+
+      // Remove old entry if exists
+      delivered.removeWhere((e) => e.startsWith('$insightId:'));
+      delivered.add(entry);
+
+      await prefs.setStringList(_prefKeyDeliveredInsights, delivered);
+      debugPrint('InsightsNotificationService: Marked insight as delivered: $insightId');
+    } catch (e) {
+      debugPrint('InsightsNotificationService: Error marking delivered: $e');
+    }
+  }
+
+  /// Check if an insight has been delivered via notification
+  Future<bool> isInsightDelivered(String insightId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final delivered = prefs.getStringList(_prefKeyDeliveredInsights) ?? [];
+      return delivered.any((e) => e.startsWith('$insightId:'));
+    } catch (e) {
+      debugPrint('InsightsNotificationService: Error checking delivered: $e');
+      return false;
+    }
+  }
+
+  /// Get list of delivered insight IDs
+  Future<Set<String>> getDeliveredInsightIds() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final delivered = prefs.getStringList(_prefKeyDeliveredInsights) ?? [];
+      return delivered.map((e) => e.split(':')[0]).toSet();
+    } catch (e) {
+      debugPrint('InsightsNotificationService: Error getting delivered ids: $e');
+      return {};
+    }
+  }
+
+  /// Clear delivered status when insight is dismissed or snoozed
+  Future<void> clearDeliveredStatus(String insightId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final delivered = prefs.getStringList(_prefKeyDeliveredInsights) ?? [];
+      delivered.removeWhere((e) => e.startsWith('$insightId:'));
+      await prefs.setStringList(_prefKeyDeliveredInsights, delivered);
+      debugPrint('InsightsNotificationService: Cleared delivered status: $insightId');
+    } catch (e) {
+      debugPrint('InsightsNotificationService: Error clearing delivered status: $e');
+    }
+  }
+
+  /// Reset all insights state (clears delivered, dismissed, snoozed)
+  /// Use this to start fresh
+  Future<void> resetAllInsightsState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_prefKeyDeliveredInsights);
+      await prefs.remove(_prefKeyDismissedInsights);
+      await prefs.remove(_prefKeyLastNotificationDate);
+      await prefs.remove('insights_shown_history');
+      await prefs.remove('insights_last_index');
+      await prefs.remove('insights_last_shown_date');
+      await prefs.remove('insights_has_new');
+      await prefs.remove('insights_dismissed_v2');
+
+      // Clear all snoozed insights
+      final keys = prefs.getKeys();
+      for (final key in keys) {
+        if (key.startsWith('insight_snoozed_')) {
+          await prefs.remove(key);
+        }
+      }
+
+      debugPrint('InsightsNotificationService: Reset all insights state');
+    } catch (e) {
+      debugPrint('InsightsNotificationService: Error resetting state: $e');
+    }
+  }
+
+  /// Schedule re-notification for snoozed insight
+  Future<void> scheduleSnoozeNotification(Insight insight, {required int days}) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final notificationTime = prefs.getString('onboarding_notification_time') ?? '09:00';
+      final timeParts = notificationTime.split(':');
+      final hour = int.parse(timeParts[0]);
+      final minute = int.parse(timeParts[1]);
+
+      final now = tz.TZDateTime.now(tz.local);
+      final scheduledDate = tz.TZDateTime(
+        tz.local,
+        now.year,
+        now.month,
+        now.day + days,
+        hour,
+        minute,
+      );
+
+      await NotificationService.instance.scheduleOneTimeReminder(
+        id: _baseNotificationId + 500 + insight.hashCode % 500,
+        title: insight.title,
+        body: insight.description,
+        dateTime: scheduledDate.toLocal(),
+        payload: 'insight_snooze:${insight.id}',
+      );
+
+      debugPrint('InsightsNotificationService: Scheduled snooze notification for ${insight.id} in $days days');
+    } catch (e) {
+      debugPrint('InsightsNotificationService: Error scheduling snooze notification: $e');
     }
   }
 

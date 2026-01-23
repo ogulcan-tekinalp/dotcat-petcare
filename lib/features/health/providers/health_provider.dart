@@ -19,7 +19,7 @@ class HealthNotifier extends StateNotifier<List<HealthNote>> {
   }
 
   Future<HealthNote> addHealthNote({
-    required String catId,
+    required String petId,
     required String title,
     required String type,
     String? description,
@@ -28,7 +28,7 @@ class HealthNotifier extends StateNotifier<List<HealthNote>> {
   }) async {
     final note = HealthNote(
       id: _uuid.v4(),
-      catId: catId,
+      petId: petId,
       title: title,
       type: type,
       description: description,

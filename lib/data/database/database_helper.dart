@@ -26,7 +26,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 7, // Version 7: Unified pets table
+      version: 8, // Version 8: additionalTimes for reminders + lastCompletionDate
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
       onConfigure: (db) async {
@@ -61,12 +61,14 @@ class DatabaseHelper {
         title TEXT NOT NULL,
         type TEXT NOT NULL,
         time TEXT NOT NULL,
+        additionalTimes TEXT,
         frequency TEXT NOT NULL DEFAULT 'daily',
         isActive INTEGER NOT NULL DEFAULT 1,
         isCompleted INTEGER NOT NULL DEFAULT 0,
         notes TEXT,
         createdAt TEXT NOT NULL,
         nextDate TEXT,
+        lastCompletionDate TEXT,
         FOREIGN KEY (petId) REFERENCES pets (id) ON DELETE CASCADE
       )
     ''');
@@ -346,6 +348,24 @@ class DatabaseHelper {
         // Re-enable FK even on error
         await db.execute('PRAGMA foreign_keys = ON');
         rethrow;
+      }
+    }
+
+    if (oldVersion < 8) {
+      try {
+        debugPrint('DatabaseHelper: Starting migration to v8 (additionalTimes + lastCompletionDate)');
+
+        // Add additionalTimes column for multiple daily reminder times
+        await db.execute('ALTER TABLE reminders ADD COLUMN additionalTimes TEXT');
+        debugPrint('DatabaseHelper: Added additionalTimes column');
+
+        // Add lastCompletionDate column to track last completion
+        await db.execute('ALTER TABLE reminders ADD COLUMN lastCompletionDate TEXT');
+        debugPrint('DatabaseHelper: Added lastCompletionDate column');
+
+        debugPrint('DatabaseHelper: Migration to v8 completed successfully');
+      } catch (e) {
+        debugPrint('DatabaseHelper: ERROR during v8 migration: $e');
       }
     }
   }

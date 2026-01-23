@@ -5,6 +5,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/localization.dart';
 import '../../../core/utils/page_transitions.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/constants/reminder_constants.dart';
 import '../../../core/utils/notification_service.dart';
 import '../../../core/services/firestore_service.dart';
 import '../../../core/services/ad_service.dart';
@@ -37,6 +38,7 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
   final _notesController = TextEditingController();
   DateTime _selectedDate = DateTime.now();
   TimeOfDay _selectedTime = const TimeOfDay(hour: 9, minute: 0);
+  List<TimeOfDay> _additionalTimes = []; // Ek saatler (max 4)
   late String _selectedType;
   String _selectedFrequency = 'once';
   int? _customDays;
@@ -50,6 +52,18 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
   String? _selectedSubType;
   bool _isOtherSubType = false;
 
+  // Çoklu saat desteği için maksimum ek saat sayısı
+  static const int _maxAdditionalTimes = 4; // Total 5 with primary
+
+  // Bu hatırlatıcı türü çoklu saat destekliyor mu?
+  bool get _supportsMultipleTimes {
+    final type = ReminderType.values.firstWhere(
+      (t) => t.value == _selectedType,
+      orElse: () => ReminderType.other,
+    );
+    return type.allowsMultipleDaily && _selectedFrequency == 'daily';
+  }
+
   // Seçilen pet'lerin tiplerini kontrol et
   bool get _hasCats {
     final cats = ref.read(catsProvider);
@@ -61,54 +75,27 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
     return _selectedCatIds.any((id) => dogs.any((dog) => dog.id == id));
   }
 
-  // Pet type'a göre reminder types döndür
+  // Pet type'a göre reminder types döndür (yeni ReminderType enum kullanır)
   List<Map<String, dynamic>> get _availableReminderTypes {
-    final types = <Map<String, dynamic>>[];
+    PetType? selectedPetType;
 
-    // Ortak tipler (her ikisi için de)
-    types.addAll([
-      {'type': 'vaccine', 'icon': Icons.vaccines, 'color': AppColors.vaccine},
-      {'type': 'medicine', 'icon': Icons.medication, 'color': AppColors.medicine},
-      {'type': 'vet', 'icon': Icons.local_hospital, 'color': AppColors.vet},
-      {'type': 'grooming', 'icon': Icons.content_cut, 'color': AppColors.grooming},
-      {'type': 'food', 'icon': Icons.restaurant, 'color': AppColors.food},
-      {'type': 'weight', 'icon': Icons.monitor_weight, 'color': AppColors.warning},
-    ]);
-
-    // Kedi-specific
-    if (_hasCats) {
-      types.insert(0, {'type': 'dotcat_complete', 'icon': Icons.star_rounded, 'color': AppColors.primary});
+    // Seçili pet'lerin tipini belirle
+    if (_hasCats && !_hasDogs) {
+      selectedPetType = PetType.cat;
+    } else if (_hasDogs && !_hasCats) {
+      selectedPetType = PetType.dog;
+    } else {
+      selectedPetType = null; // Her ikisi de var veya hiçbiri seçilmedi
     }
 
-    // Köpek-specific
-    if (_hasDogs) {
-      types.addAll([
-        {'type': 'walk', 'icon': Icons.directions_walk, 'color': Color(0xFF4CAF50)},
-        {'type': 'training', 'icon': Icons.school, 'color': Color(0xFF2196F3)},
-        {'type': 'playtime', 'icon': Icons.sports_soccer, 'color': Color(0xFFFF9800)},
-        {'type': 'bath', 'icon': Icons.bathtub, 'color': Color(0xFF00BCD4)},
-      ]);
-    }
+    // ReminderType enum'dan uygun türleri al
+    final availableTypes = getReminderTypesForPet(selectedPetType);
 
-    // Her ikisi de yoksa (henüz pet seçilmedi), hepsini göster
-    if (!_hasCats && !_hasDogs && _selectedCatIds.isEmpty) {
-      return [
-        {'type': 'dotcat_complete', 'icon': Icons.star_rounded, 'color': AppColors.primary},
-        {'type': 'vaccine', 'icon': Icons.vaccines, 'color': AppColors.vaccine},
-        {'type': 'medicine', 'icon': Icons.medication, 'color': AppColors.medicine},
-        {'type': 'vet', 'icon': Icons.local_hospital, 'color': AppColors.vet},
-        {'type': 'grooming', 'icon': Icons.content_cut, 'color': AppColors.grooming},
-        {'type': 'food', 'icon': Icons.restaurant, 'color': AppColors.food},
-        {'type': 'exercise', 'icon': Icons.fitness_center, 'color': Color(0xFFFF9800)},
-        {'type': 'weight', 'icon': Icons.monitor_weight, 'color': AppColors.warning},
-        {'type': 'walk', 'icon': Icons.directions_walk, 'color': Color(0xFF4CAF50)},
-        {'type': 'training', 'icon': Icons.school, 'color': Color(0xFF2196F3)},
-        {'type': 'playtime', 'icon': Icons.sports_soccer, 'color': Color(0xFFFF9800)},
-        {'type': 'bath', 'icon': Icons.bathtub, 'color': Color(0xFF00BCD4)},
-      ];
-    }
-
-    return types;
+    return availableTypes.map((type) => {
+      'type': type.value,
+      'icon': type.icon,
+      'color': type.color,
+    }).toList();
   }
 
   final _frequencies = [
@@ -167,6 +154,17 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
           hour: int.tryParse(timeParts[0]) ?? 9,
           minute: int.tryParse(timeParts[1]) ?? 0,
         );
+      }
+
+      // Ek saatleri parse et
+      if (reminder.additionalTimes != null && reminder.additionalTimes!.isNotEmpty) {
+        _additionalTimes = reminder.additionalTimes!.map((timeStr) {
+          final parts = timeStr.split(':');
+          return TimeOfDay(
+            hour: int.tryParse(parts[0]) ?? 9,
+            minute: int.tryParse(parts[1]) ?? 0,
+          );
+        }).toList();
       }
       
       // Subtype'ı bul (title'dan veya type'a göre)
@@ -244,8 +242,17 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
         // Alt tür yok ama başlık var
         _titleController.text = widget.initialTitle!;
         _isOtherSubType = true;
+      } else {
+        // Alt tür ve başlık yok - türün displayName'ini kullan
+        // ReminderType'dan displayName al
+        final typeEnum = ReminderType.values.firstWhere(
+          (t) => t.value == _selectedType,
+          orElse: () => ReminderType.other,
+        );
+        _titleController.text = typeEnum.displayName;
+        _isOtherSubType = true;
       }
-      
+
       // Hatırlatıcı varsayılan açık
       _enableReminder = true;
       
@@ -346,6 +353,7 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
       }
 
       final cats = ref.read(catsProvider);
+      final dogs = ref.read(dogsProvider);
       // İlk etkinlik tarihi = seçilen tarih (nextDate olarak kaydedilecek)
       // Böylece yaklaşanlar listesinde doğru görünecek
       final firstEventDate = _selectedDate;
@@ -473,18 +481,33 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
         
         final shouldNotify = _enableReminder && scheduledDateTime.isAfter(now);
         
-        for (final catId in _selectedCatIds) {
-          final cat = cats.where((c) => c.id == catId).firstOrNull;
-          if (cat == null) {
-            debugPrint('Warning: Cat with id $catId not found in cats list');
+        for (final petId in _selectedCatIds) {
+          // Hem kedilerde hem köpeklerde ara
+          final cat = cats.where((c) => c.id == petId).firstOrNull;
+          final dog = dogs.where((d) => d.id == petId).firstOrNull;
+          final pet = cat ?? dog;
+
+          if (pet == null) {
+            debugPrint('Warning: Pet with id $petId not found in cats or dogs list');
             continue;
           }
+
+          final petName = pet is Cat ? pet.name : (pet as Dog).name;
+
+          // Ek saatleri string listesine dönüştür
+          final additionalTimeStrings = _additionalTimes.isNotEmpty
+              ? _additionalTimes.map((t) =>
+                  '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}'
+                ).toList()
+              : null;
+
           await ref.read(remindersProvider.notifier).addReminder(
-            catId: catId,
-            catName: cat.name,
+            catId: petId,
+            catName: petName,
             title: title,
             type: _selectedType,
             time: timeStr,
+            additionalTimes: additionalTimeStrings,
             frequency: frequency,
             description: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
             notificationEnabled: shouldNotify,
@@ -498,11 +521,9 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
         if (mounted) {
           AppToast.success(context, AppLocalizations.get('record_saved'));
 
-          // Show ad after adding reminder (except first pet's first reminder)
-          final totalPets = cats.length;
+          // Show ad after adding reminder (except the first one)
           final totalReminders = ref.read(remindersProvider).length;
           await AdService.instance.onReminderAdded(
-            totalPets: totalPets,
             totalReminders: totalReminders - _selectedCatIds.length, // Count before this addition
           );
 
@@ -619,6 +640,14 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
           const SizedBox(height: 8),
           _buildReminderSection(isDark, nextRecurrence),
           const SizedBox(height: 20),
+
+          // Multiple times section (for daily reminders that support it)
+          if (_supportsMultipleTimes) ...[
+            _buildSectionTitle(AppLocalizations.get('additional_times'), false),
+            const SizedBox(height: 8),
+            _buildMultipleTimesSection(isDark),
+            const SizedBox(height: 20),
+          ],
 
           // Mark as completed
           if (_isPastDate && _selectedFrequency == 'once') ...[
@@ -792,7 +821,7 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
                 Icon(type['icon'] as IconData, color: isSelected ? color : AppColors.textSecondary, size: 22),
               const SizedBox(height: 4),
               Text(
-                isDotcat ? AppLocalizations.get('products') : AppLocalizations.get(type['type'] as String),
+                isDotcat ? AppLocalizations.get('products') : AppLocalizations.get('reminder_type_${type['type']}'),
                 style: TextStyle(color: isSelected ? color : AppColors.textSecondary, fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal, fontSize: 9),
                 textAlign: TextAlign.center,
                 maxLines: 2,
@@ -897,7 +926,13 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
       children: _frequencies.map((freq) {
         final isSelected = _selectedFrequency == freq['key'];
         return GestureDetector(
-          onTap: () => setState(() => _selectedFrequency = freq['key']!),
+          onTap: () => setState(() {
+            _selectedFrequency = freq['key']!;
+            // Daily dışında bir frekans seçildiğinde ek saatleri temizle
+            if (_selectedFrequency != 'daily') {
+              _additionalTimes.clear();
+            }
+          }),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
@@ -1073,6 +1108,203 @@ class _AddReminderScreenState extends ConsumerState<AddReminderScreen> {
             ),
           ),
         ),
+      ],
+    );
+  }
+
+  Widget _buildMultipleTimesSection(bool isDark) {
+    final canAddMore = _additionalTimes.length < _maxAdditionalTimes;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.surfaceDark : Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Info text
+          Row(
+            children: [
+              Icon(Icons.info_outline, size: 18, color: AppColors.info),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  AppLocalizations.get('multiple_times_info'),
+                  style: TextStyle(fontSize: 12, color: context.textSecondary),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // Primary time (read-only display)
+          _buildTimeRow(
+            isDark: isDark,
+            time: _selectedTime,
+            label: AppLocalizations.get('primary_time'),
+            isPrimary: true,
+            onRemove: null,
+          ),
+
+          // Additional times
+          ..._additionalTimes.asMap().entries.map((entry) {
+            final index = entry.key;
+            final time = entry.value;
+            return Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: _buildTimeRow(
+                isDark: isDark,
+                time: time,
+                label: '${AppLocalizations.get('additional_time')} ${index + 1}',
+                isPrimary: false,
+                onRemove: () => setState(() => _additionalTimes.removeAt(index)),
+                onTimeChanged: (newTime) => setState(() => _additionalTimes[index] = newTime),
+              ),
+            );
+          }),
+
+          // Add button
+          if (canAddMore) ...[
+            const SizedBox(height: 12),
+            TextButton.icon(
+              onPressed: () {
+                setState(() {
+                  // Yeni saat ekle - son saatten 2 saat sonra
+                  final lastTime = _additionalTimes.isNotEmpty
+                      ? _additionalTimes.last
+                      : _selectedTime;
+                  final newHour = (lastTime.hour + 2) % 24;
+                  _additionalTimes.add(TimeOfDay(hour: newHour, minute: lastTime.minute));
+                });
+              },
+              icon: const Icon(Icons.add_circle_outline, size: 20),
+              label: Text(AppLocalizations.get('add_time')),
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.primary,
+              ),
+            ),
+          ],
+
+          // Max reached info
+          if (!canAddMore)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                AppLocalizations.get('max_times_reached'),
+                style: TextStyle(fontSize: 11, color: context.textSecondary, fontStyle: FontStyle.italic),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTimeRow({
+    required bool isDark,
+    required TimeOfDay time,
+    required String label,
+    required bool isPrimary,
+    VoidCallback? onRemove,
+    Function(TimeOfDay)? onTimeChanged,
+  }) {
+    return Row(
+      children: [
+        // Label
+        SizedBox(
+          width: 80,
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: isPrimary ? AppColors.primary : context.textSecondary,
+              fontWeight: isPrimary ? FontWeight.w600 : FontWeight.normal,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+
+        // Time picker
+        if (isPrimary)
+          // Primary time (display only, edited in reminder section)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+                color: AppColors.primary,
+              ),
+            ),
+          )
+        else
+          // Additional time picker
+          Row(
+            children: [
+              // Hour
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: isDark ? AppColors.surfaceDark : Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<int>(
+                    value: time.hour,
+                    isDense: true,
+                    items: List.generate(24, (i) => DropdownMenuItem(
+                      value: i,
+                      child: Text(i.toString().padLeft(2, '0'), style: const TextStyle(fontSize: 14)),
+                    )),
+                    onChanged: (v) => onTimeChanged?.call(TimeOfDay(hour: v!, minute: time.minute)),
+                  ),
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 4),
+                child: Text(':', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              ),
+              // Minute
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: isDark ? AppColors.surfaceDark : Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<int>(
+                    value: time.minute,
+                    isDense: true,
+                    items: List.generate(12, (i) => DropdownMenuItem(
+                      value: i * 5,
+                      child: Text((i * 5).toString().padLeft(2, '0'), style: const TextStyle(fontSize: 14)),
+                    )),
+                    onChanged: (v) => onTimeChanged?.call(TimeOfDay(hour: time.hour, minute: v!)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+        const Spacer(),
+
+        // Remove button
+        if (!isPrimary && onRemove != null)
+          IconButton(
+            onPressed: onRemove,
+            icon: Icon(Icons.remove_circle_outline, color: AppColors.error, size: 20),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+          ),
       ],
     );
   }
